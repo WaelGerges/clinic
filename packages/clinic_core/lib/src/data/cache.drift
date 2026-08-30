@@ -1,0 +1,147 @@
+CREATE TABLE cached_patients (
+  id TEXT NOT NULL PRIMARY KEY,
+  clinic_id TEXT NOT NULL,
+  full_name TEXT NOT NULL,
+  gender TEXT NOT NULL,
+  birth_date TEXT NOT NULL,
+  mobile TEXT NOT NULL,
+  mobile_digits TEXT NOT NULL,
+  secondary_mobile TEXT NOT NULL DEFAULT '',
+  patient_number TEXT NOT NULL,
+  address TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  alerts TEXT NOT NULL DEFAULT '',
+  archived INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL
+);
+CREATE INDEX patient_search_idx ON cached_patients(clinic_id, archived, full_name, id);
+CREATE INDEX patient_phone_idx ON cached_patients(clinic_id, mobile_digits);
+
+CREATE TABLE cached_appointments (
+  id TEXT NOT NULL PRIMARY KEY,
+  clinic_id TEXT NOT NULL,
+  patient_id TEXT NOT NULL REFERENCES cached_patients(id),
+  doctor_id TEXT NOT NULL,
+  starts_at TEXT NOT NULL,
+  status TEXT NOT NULL,
+  appointment_type TEXT NOT NULL,
+  notes TEXT NOT NULL DEFAULT '',
+  version INTEGER NOT NULL
+);
+CREATE INDEX appointment_day_idx ON cached_appointments(clinic_id, starts_at, id);
+CREATE INDEX appointment_patient_idx ON cached_appointments(patient_id);
+
+CREATE TABLE cached_visits (
+  id TEXT NOT NULL PRIMARY KEY,
+  clinic_id TEXT NOT NULL,
+  patient_id TEXT NOT NULL REFERENCES cached_patients(id),
+  appointment_id TEXT NOT NULL REFERENCES cached_appointments(id),
+  doctor_id TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  notes TEXT NOT NULL DEFAULT '',
+  follow_up TEXT NOT NULL DEFAULT '',
+  completed INTEGER NOT NULL DEFAULT 0,
+  version INTEGER NOT NULL,
+  current_revision INTEGER NOT NULL DEFAULT 0,
+  amendment_reason TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX visit_timeline_idx ON cached_visits(clinic_id, patient_id, created_at, id);
+CREATE INDEX visit_appointment_idx ON cached_visits(appointment_id);
+
+CREATE TABLE cached_diagnoses (
+  visit_id TEXT NOT NULL REFERENCES cached_visits(id),
+  position INTEGER NOT NULL,
+  description TEXT NOT NULL,
+  PRIMARY KEY (visit_id, position)
+);
+CREATE TABLE cached_medications (
+  id TEXT NOT NULL PRIMARY KEY,
+  visit_id TEXT NOT NULL REFERENCES cached_visits(id),
+  position INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  strength TEXT NOT NULL DEFAULT '',
+  dose TEXT NOT NULL DEFAULT '',
+  frequency TEXT NOT NULL DEFAULT '',
+  duration TEXT NOT NULL DEFAULT '',
+  instructions TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT ''
+);
+CREATE INDEX medication_visit_idx ON cached_medications(visit_id, position);
+
+CREATE TABLE outbox (
+  sequence INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  operation_id TEXT NOT NULL UNIQUE,
+  clinic_id TEXT NOT NULL,
+  entity_type TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  "action" TEXT NOT NULL,
+  payload TEXT NOT NULL,
+  expected_version INTEGER NOT NULL,
+  state TEXT NOT NULL DEFAULT 'pending',
+  error TEXT,
+  remote_value TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX outbox_state_idx ON outbox(clinic_id, state, sequence);
+CREATE INDEX outbox_entity_idx ON outbox(entity_type, entity_id);
+
+CREATE TABLE cache_metadata (
+  "key" TEXT NOT NULL PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+-- Recovery evidence remains in the same account/clinic encrypted database.
+CREATE TABLE sync_resolutions (
+  id TEXT NOT NULL PRIMARY KEY,
+  clinic_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  resolved_at TEXT NOT NULL,
+  choice TEXT NOT NULL,
+  original_operations TEXT NOT NULL,
+  local_value TEXT NOT NULL,
+  remote_value TEXT NOT NULL,
+  resolved_value TEXT NOT NULL,
+  replacement_operation_id TEXT
+);
+CREATE INDEX sync_resolution_clinic_idx ON sync_resolutions(clinic_id, resolved_at);
+
+CREATE TABLE cached_documents (
+  id TEXT NOT NULL PRIMARY KEY,
+  clinic_id TEXT NOT NULL,
+  patient_id TEXT NOT NULL REFERENCES cached_patients(id),
+  visit_id TEXT REFERENCES cached_visits(id),
+  file_name TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  category TEXT NOT NULL,
+  notes TEXT NOT NULL DEFAULT '',
+  object_path TEXT NOT NULL UNIQUE,
+  bytes INTEGER NOT NULL,
+  sha256_hex TEXT NOT NULL,
+  clinical INTEGER NOT NULL DEFAULT 1,
+  state TEXT NOT NULL,
+  uploaded_by TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL
+);
+CREATE INDEX cached_document_patient_idx ON cached_documents(clinic_id, patient_id, created_at, id);
+CREATE INDEX cached_document_visit_idx ON cached_documents(clinic_id, visit_id, created_at, id);
+
+CREATE TABLE document_blobs (
+  attachment_id TEXT NOT NULL PRIMARY KEY REFERENCES cached_documents(id) ON DELETE CASCADE,
+  clinic_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  data BLOB NOT NULL,
+  sha256_hex TEXT NOT NULL,
+  transfer_state TEXT NOT NULL DEFAULT 'pending',
+  error TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX document_blob_state_idx ON document_blobs(clinic_id, user_id, transfer_state, created_at);

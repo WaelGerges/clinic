@@ -1,0 +1,11 @@
+{
+  "name": "clinic-backend-validation",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": { "test": "node --test backend-tests/*.test.mjs" },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "supabase": "2.116.0"
+  }
+}

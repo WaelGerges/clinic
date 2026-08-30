@@ -1,0 +1,12 @@
+name: clinic_workspace
+publish_to: none
+environment:
+  sdk: '>=3.12.0 <4.0.0'
+workspace:
+  - apps/assistant
+  - apps/doctor
+  - packages/clinic_core
+hooks:
+  user_defines:
+    sqlite3:
+      source: sqlite3mc
