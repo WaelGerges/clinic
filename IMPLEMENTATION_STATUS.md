@@ -64,6 +64,7 @@ This is the persistent execution checkpoint. Update it whenever work changes sta
 - The initial audited source upload excluded the development Supabase config, APK/AAB/ZIP artifacts, builds, IDE files, local databases, Android local properties, and signing credentials. No candidate file exceeded 25 MB; secret-pattern matches were documentation warnings only.
 - The private [Clinic GitHub Project](https://github.com/users/WaelGerges/projects/1) is linked to the repository and contains five open issues matching the remaining implementation and validation workstreams.
 - Final verification confirmed private repository/project visibility, remote `main` at the local commit, five Project items, and HTTP 404 for ignored remote paths `config/development.json` and `dist/`.
+- Android Studio is configured to recognize the workspace root as Git through .idea/vcs.xml. GitHub CLI is registered as the secure Git credential helper for github.com; authenticated fetch and dry-run push both succeed for origin/main as WaelGerges.
 Current debug artifacts:
 
 | App | Bytes | APK SHA-256 | Generated/packaged kernel SHA-256 |
