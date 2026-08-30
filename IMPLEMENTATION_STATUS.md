@@ -69,6 +69,11 @@ Current debug artifacts:
 - Smaller ARM64 physical-device builds are staged for WhatsApp transfer in `dist/whatsapp/`. Assistant: APK 111.4 MB, SHA-256 `1DD78F21148089572C1561C913815A6729E7B49C7763297992D5632A533BA786`; ZIP 82.6 MB, SHA-256 `07EDC598DE6185A8BAECE7F8618DE41663EDA1E1876EC4DCA642AF23C96E0AF7`. Doctor: APK 111.4 MB, SHA-256 `CCC997F9DB866376AA092D4C0D62D91E624398C5925D78BB0760CEE2D7E7BE61`; ZIP 82.6 MB, SHA-256 `3FAC905C29E081B54B979746EF76D409FFA42A7D0E2934598EDA79EB1534719A`. These are debug-only ARM64 packages and are not signed production releases.
 
 ## Partially completed or requiring external validation
+### GitHub source control
+
+- The source is stored in the private GitHub repository WaelGerges/clinic at https://github.com/WaelGerges/clinic, with local main tracking origin/main.
+- The initial audited source commit excluded the ignored development Supabase config, APK/AAB/ZIP artifacts, builds, IDE files, local databases, Android local properties, and signing credentials. No candidate file exceeded 25 MB; secret-pattern matches were documentation warnings only.
+- The requested GitHub Project is not created yet. GitHub CLI needs a second device OAuth approval for the project and ead:project scopes; the earlier pending permission request was cancelled to perform the repository rename.
 
 ### Password recovery and hosted Auth
 
@@ -104,5 +109,5 @@ Current debug artifacts:
 
 ## Exact next task
 
-Configure these exact hosted Auth Additional Redirect URLs through a signed-in dashboard session: `dev.homeversion.clinic.assistant://auth-callback/` and `dev.homeversion.clinic.doctor://auth-callback/`. Then rebuild/relaunch both apps, open a fresh confirmation link on the same Android device that initiated signup, verify that the matching app receives the callback, and continue with two-account clinic creation/invitation acceptance. After hosted Auth acceptance, the next codebase task is the durable paginated delta/tombstone protocol described above.
+Complete the GitHub CLI device OAuth approval for `project` and `read:project`, create the `Clinic ChatGPT` GitHub Project under `WaelGerges`, and record its URL. Then configure these exact hosted Auth Additional Redirect URLs through a signed-in dashboard session: `dev.homeversion.clinic.assistant://auth-callback/` and `dev.homeversion.clinic.doctor://auth-callback/`. Rebuild/relaunch both apps, open a fresh confirmation link on the same Android device that initiated signup, verify that the matching app receives the callback, and continue with two-account clinic creation/invitation acceptance. After hosted Auth acceptance, the next codebase task is the durable paginated delta/tombstone protocol described above.
 
