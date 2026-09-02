@@ -1,6 +1,6 @@
 # Clinic Apps — Implementation Status
 
-Last updated: 30 August 2026
+Last updated: 2 September 2026
 
 This is the persistent execution checkpoint. Update it whenever work changes state, verification changes, and before stopping. `CONTINUE-HERE.md` contains the broader architecture and operating context.
 
@@ -49,6 +49,8 @@ This is the persistent execution checkpoint. Update it whenever work changes sta
 - Android `FLAG_SECURE`, disabled backup and cleartext traffic, separate application IDs, and iOS project/privacy declarations.
 
 ### Verification completed
+
+- The approved `clinic-chatgpt-dev` project now has a complete fictional test sequence named `Patient 01` through `Patient 100` in `Clinic-Test1`. On 2 September 2026, 98 missing rows (`Patient 03` through `Patient 100`) were inserted with synthetic demographics, digit-only non-routable test mobile values, a fictional address, and the marker `FICTIONAL-SEED-2026-09-02`. Verification found no missing name in the 1-100 sequence, and the seed marker identifies exactly 98 inserted rows. Existing records were preserved. Subsequent concurrent app activity advanced the live clinic total and its synchronized patient counter to `103`; this does not alter the 98-row seed set.
 
 - Flutter: **45/45 tests pass** across domain, authorization lease, encrypted cache/repository, delivery presence/receipt, recovery, amendment, audit, accessibility/layout, and UI flows.
 - Backend: **27/27 PGlite tests pass**, including presence-gated handoff, device binding, exact acknowledgement replay, immutable receipt retention, authorization, and audit behavior.
