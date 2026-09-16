@@ -37,11 +37,17 @@ class ClinicDatabase extends _$ClinicDatabase {
     );
   }
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
     onUpgrade: (m, from, to) async {
+      if (from < 5) {
+        await m.addColumn(
+          cachedAppointments,
+          cachedAppointments.durationMinutes,
+        );
+      }
       if (from < 2) {
         await m.createTable(syncResolutions);
         await customStatement(

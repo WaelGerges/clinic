@@ -1,3 +1,4 @@
+import 'package:clinic_core/src/presentation/language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -61,21 +62,30 @@ class _PatientSyncReviewScreenState
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          useServer ? 'Keep the server version?' : 'Queue this reviewed merge?',
+          tr(
+            useServer
+                ? 'Keep the server version?'
+                : 'Queue this reviewed merge?',
+          ),
         ),
         content: Text(
           useServer
-              ? 'The server patient will replace the local record. All ${current.operationCount} queued saves and both versions will remain in encrypted recovery history.'
-              : 'Only the selected fields will come from this device. Other fields stay as shown on the server. The merged save can conflict again if another device edits first. Original changes remain in encrypted recovery history.',
+              ? tr(
+                  'The server patient will replace the local record. All {0} queued saves and both versions will remain in encrypted recovery history.',
+                  [current.operationCount],
+                )
+              : tr(
+                  'Only the selected fields will come from this device. Other fields stay as shown on the server. The merged save can conflict again if another device edits first. Original changes remain in encrypted recovery history.',
+                ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(tr('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(useServer ? 'Keep server version' : 'Queue merge'),
+            child: Text(tr(useServer ? 'Keep server version' : 'Queue merge')),
           ),
         ],
       ),
@@ -122,11 +132,11 @@ class _PatientSyncReviewScreenState
       canPop: !busy,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Patient changes'),
+          title: Text(tr('Patient changes')),
           actions: [
             IconButton(
               onPressed: busy ? null : load,
-              tooltip: 'Reload latest versions',
+              tooltip: tr('Reload latest versions'),
               icon: const Icon(Icons.refresh),
             ),
           ],
@@ -143,7 +153,7 @@ class _PatientSyncReviewScreenState
                         error ?? 'Connect to load the latest server record.',
                     action: FilledButton(
                       onPressed: load,
-                      child: const Text('Try again'),
+                      child: Text(tr('Try again')),
                     ),
                   ),
                 )
@@ -156,11 +166,18 @@ class _PatientSyncReviewScreenState
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      '${current.operationCount} local ${current.operationCount == 1 ? 'save' : 'saves'} retained · Server version ${current.remote.version}',
+                      tr(
+                        current.operationCount == 1
+                            ? "{0} local save retained · Server version {1}"
+                            : "{0} local saves retained · Server version {1}",
+                        [current.operationCount, current.remote.version],
+                      ),
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      'Compare each field. Server values are selected by default. Choose any device values you want to keep in the merged save.',
+                    Text(
+                      tr(
+                        'Compare each field. Server values are selected by default. Choose any device values you want to keep in the merged save.',
+                      ),
                     ),
                     const SizedBox(height: 12),
                     for (final field in differentFields)
@@ -168,7 +185,9 @@ class _PatientSyncReviewScreenState
                     if (unchangedFields.isNotEmpty)
                       ExpansionTile(
                         title: Text(
-                          'Unchanged fields (${unchangedFields.length})',
+                          tr("Unchanged fields ({0})", [
+                            unchangedFields.length,
+                          ]),
                         ),
                         children: [
                           for (final field in unchangedFields)
@@ -180,16 +199,18 @@ class _PatientSyncReviewScreenState
                       onPressed: localFields.isEmpty
                           ? null
                           : () => resolve(useServer: false),
-                      child: const Text('Queue reviewed merge'),
+                      child: Text(tr('Queue reviewed merge')),
                     ),
                     const SizedBox(height: 12),
                     OutlinedButton(
                       onPressed: () => resolve(useServer: true),
-                      child: const Text('Keep server version'),
+                      child: Text(tr('Keep server version')),
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      'Neither choice deletes your original changes. Review them later in More → Recovery history.',
+                    Text(
+                      tr(
+                        'Neither choice deletes your original changes. Review them later in More → Recovery history.',
+                      ),
                     ),
                   ],
                 ),
@@ -214,14 +235,14 @@ class _PatientSyncReviewScreenState
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (different) ...[
-            Text('This device: ${_display(local)}'),
+            Text(tr("This device: {0}", [_display(local)])),
             const SizedBox(height: 8),
-            Text('Server: ${_display(remote)}'),
+            Text(tr("Server: {0}", [_display(remote)])),
             if (editable)
               CheckboxListTile(
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
-                title: Text('Use this device’s ${label.toLowerCase()}'),
+                title: Text(tr("Use this device’s {0}", [label.toLowerCase()])),
                 value: localFields.contains(key),
                 onChanged: (selected) => setState(() {
                   if (selected == true) {
@@ -232,14 +253,16 @@ class _PatientSyncReviewScreenState
                 }),
               )
             else
-              const Padding(
+              Padding(
                 padding: EdgeInsets.only(top: 8),
                 child: Text(
-                  'The doctor controls medical alerts. The server value will be kept.',
+                  tr(
+                    'The doctor controls medical alerts. The server value will be kept.',
+                  ),
                 ),
               ),
           ] else
-            Text('${_display(remote)} · Same on both'),
+            Text(tr("{0} · Same on both", [_display(remote)])),
         ],
       ),
     );
@@ -258,26 +281,37 @@ class _PatientRecoveryHistoryScreenState
   int offset = 0;
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Recovery history')),
+    appBar: AppBar(title: Text(tr('Recovery history'))),
     body: SafeArea(
       child: LoadView<List<PatientSyncResolution>>(
         load: (repo) => repo.patientRecoveryHistory(offset: offset),
         builder: (entries) => ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            const Text(
-              'Encrypted history on this device. Original requests and both versions are retained. A queued merge is not proof of server acceptance.',
+            Text(
+              tr(
+                'Encrypted history on this device. Original requests and both versions are retained. A queued merge is not proof of server acceptance.',
+              ),
             ),
             const SizedBox(height: 12),
             if (entries.isEmpty)
-              const Text('No reviewed conflicts on this page.'),
+              Text(tr('No reviewed conflicts on this page.')),
             for (final entry in entries)
               Card(
                 child: ListTile(
                   title: Text(entry.local.name),
                   subtitle: Text(
-                    '${entry.choice == 'server' ? 'Kept server version' : 'Queued reviewed merge'}\n'
-                    '${DateFormat('d MMM yyyy, HH:mm').format(ClinicTime.local(entry.resolvedAt))} · ${entry.operationCount} original saves',
+                    tr("{0}\n{1} · {2} original saves", [
+                      tr(
+                        entry.choice == 'server'
+                            ? 'Kept server version'
+                            : 'Queued reviewed merge',
+                      ),
+                      DateFormat(
+                        'd MMM yyyy, HH:mm',
+                      ).format(ClinicTime.local(entry.resolvedAt)),
+                      entry.operationCount,
+                    ]),
                   ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => showModalBottomSheet<void>(
@@ -302,13 +336,21 @@ class _PatientRecoveryHistoryScreenState
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Original device: ${_display(entry.local.toMap()[field.key])}',
+                                    tr("Original device: {0}", [
+                                      _display(entry.local.toMap()[field.key]),
+                                    ]),
                                   ),
                                   Text(
-                                    'Server at review: ${_display(entry.remote.toMap()[field.key])}',
+                                    tr("Server at review: {0}", [
+                                      _display(entry.remote.toMap()[field.key]),
+                                    ]),
                                   ),
                                   Text(
-                                    'Selected result: ${_display(entry.resolved.toMap()[field.key])}',
+                                    tr("Selected result: {0}", [
+                                      _display(
+                                        entry.resolved.toMap()[field.key],
+                                      ),
+                                    ]),
                                   ),
                                 ],
                               ),
@@ -326,13 +368,13 @@ class _PatientRecoveryHistoryScreenState
                   onPressed: offset == 0
                       ? null
                       : () => setState(() => offset -= 50),
-                  child: const Text('Previous'),
+                  child: Text(tr('Previous')),
                 ),
                 TextButton(
                   onPressed: entries.length < 50
                       ? null
                       : () => setState(() => offset += 50),
-                  child: const Text('Next'),
+                  child: Text(tr('Next')),
                 ),
               ],
             ),

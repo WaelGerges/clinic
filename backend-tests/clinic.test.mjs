@@ -9,6 +9,8 @@ const doctorA = randomUUID(), doctorB = randomUUID(), assistantA = randomUUID(),
 const deliveryAssistant = randomUUID();
 const doctorDeviceA = randomUUID(), doctorDeviceB = randomUUID();
 let clinicA, clinicB;
+let fixtureSlot = 0;
+function fixtureTime(){ const now=new Date(); const day=new Intl.DateTimeFormat("en-CA",{timeZone:"Africa/Cairo",year:"numeric",month:"2-digit",day:"2-digit"}).format(now); return new Date(Date.parse(`${day}T00:00:00+03:00`)+(fixtureSlot++)*30*60*1000).toISOString(); }
 
 async function asUser(id, role = 'authenticated') {
   await db.exec('reset role');
@@ -32,7 +34,7 @@ async function newPatient(clinic = clinicA) {
 }
 async function appointmentFor(patient, doctor = doctorA) {
   return (await command(patient.clinic_id,'appointment',randomUUID(),'save',{
-    patient_id:patient.id, doctor_id:doctor, starts_at:new Date().toISOString(),
+    patient_id:patient.id, doctor_id:doctor, starts_at:fixtureTime(),
     appointment_type:'Consultation',notes:''},0)).entity;
 }
 async function waiting(appointment) {
@@ -694,3 +696,41 @@ test('archiving immediately revokes document reads and restoration requires the 
     'the application has no object delete policy');
 });
 
+
+
+test('smart scheduling enforces durations, adjacent slots, breaks, cancellation, access and waitlist isolation',async()=>{
+  await asUser(doctorA);
+  const clinic=(await db.query("select public.clinic_create('Fictional scheduling clinic') as id")).rows[0].id;
+  const patient=await newPatient(clinic);
+  const schedule=async(action,payload={},who=doctorA)=> (await db.query('select public.clinic_schedule($1,$2,$3,$4::jsonb) as data',[clinic,who,action,JSON.stringify(payload)])).rows[0].data;
+  const periods=[{weekday:1,start:540,end:720},{weekday:1,start:780,end:1020}];
+  await schedule('settings',{periods});
+  const input=(time,duration=30)=>({patient_id:patient.id,doctor_id:doctorA,starts_at:`2026-09-14T${time}:00+03:00`,duration_minutes:duration});
+  const id=randomUUID(),op=randomUUID();
+  const first=await command(clinic,'appointment',id,'save',input('09:00',45),0,op);
+  assert.equal(first.entity.duration_minutes,45);
+  assert.deepEqual(await command(clinic,'appointment',id,'save',input('09:00',45),0,op),first);
+  await assert.rejects(command(clinic,'appointment',randomUUID(),'save',input('09:30'),0),/SLOT_UNAVAILABLE/);
+  await command(clinic,'appointment',randomUUID(),'save',input('09:45'),0);
+  await assert.rejects(command(clinic,'appointment',randomUUID(),'save',input('11:45'),0),/OUTSIDE_WORKING_HOURS/);
+  await assert.rejects(command(clinic,'appointment',randomUUID(),'save',input('12:30'),0),/OUTSIDE_WORKING_HOURS/);
+  await assert.rejects(command(clinic,'appointment',randomUUID(),'save',input('14:00',0),0));
+  await command(clinic,'appointment',id,'status',{status:'cancelled'},first.version);
+  await command(clinic,'appointment',randomUUID(),'save',input('09:00',45),0);
+  await schedule('waitlist_add',{patient_id:patient.id,notes:'Fictional earlier appointment request'});
+  await schedule('waitlist_add',{patient_id:patient.id,notes:'Updated'});
+  const state=await schedule('read');assert.equal(state.waitlist.length,1);
+  await assert.rejects(schedule('settings',{periods:[{weekday:1,start:600,end:500}]}),/INVALID_SCHEDULE/);
+  await assert.rejects(schedule('settings',{periods:[...periods,{weekday:1,start:660,end:800}]}),/INVALID_SCHEDULE/);
+  await db.exec('reset role');
+  await db.query("insert into public.clinic_memberships(clinic_id,user_id,role) values($1,$2,'assistant')",[clinic,assistantA]);
+  await asUser(assistantA);assert.equal((await schedule('read')).settings.configured,true);
+  await assert.rejects(schedule('settings',{periods}),/FORBIDDEN/);
+  await db.exec('reset role');await db.query('update public.clinic_memberships set active=false where clinic_id=$1 and user_id=$2',[clinic,assistantA]);
+  await asUser(assistantA);await assert.rejects(schedule('read'),/FORBIDDEN/);
+  await asUser(doctorB);await assert.rejects(schedule('read'),/FORBIDDEN/);
+  await asUser(null,'anon');await assert.rejects(schedule('read'),e=>e.code==='42501');
+  await asUser(doctorA);await schedule('waitlist_remove',{id:state.waitlist[0].id});
+  assert.equal((await schedule('read')).waitlist.length,0);
+  await assert.rejects(db.query('select * from clinic_private.schedule_settings'),e=>e.code==='42501');
+});

@@ -958,6 +958,18 @@ class CachedAppointments extends Table
     requiredDuringInsert: true,
     $customConstraints: 'NOT NULL',
   );
+  static const VerificationMeta _durationMinutesMeta = const VerificationMeta(
+    'durationMinutes',
+  );
+  late final GeneratedColumn<int> durationMinutes = GeneratedColumn<int>(
+    'duration_minutes',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    $customConstraints: 'NOT NULL DEFAULT 30',
+    defaultValue: const CustomExpression('30'),
+  );
   static const VerificationMeta _statusMeta = const VerificationMeta('status');
   late final GeneratedColumn<String> status = GeneratedColumn<String>(
     'status',
@@ -1006,6 +1018,7 @@ class CachedAppointments extends Table
     patientId,
     doctorId,
     startsAt,
+    durationMinutes,
     status,
     appointmentType,
     notes,
@@ -1059,6 +1072,15 @@ class CachedAppointments extends Table
       );
     } else if (isInserting) {
       context.missing(_startsAtMeta);
+    }
+    if (data.containsKey('duration_minutes')) {
+      context.handle(
+        _durationMinutesMeta,
+        durationMinutes.isAcceptableOrUnknown(
+          data['duration_minutes']!,
+          _durationMinutesMeta,
+        ),
+      );
     }
     if (data.containsKey('status')) {
       context.handle(
@@ -1122,6 +1144,10 @@ class CachedAppointments extends Table
         DriftSqlType.string,
         data['${effectivePrefix}starts_at'],
       )!,
+      durationMinutes: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}duration_minutes'],
+      )!,
       status: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}status'],
@@ -1157,6 +1183,7 @@ class CachedAppointment extends DataClass
   final String patientId;
   final String doctorId;
   final String startsAt;
+  final int durationMinutes;
   final String status;
   final String appointmentType;
   final String notes;
@@ -1167,6 +1194,7 @@ class CachedAppointment extends DataClass
     required this.patientId,
     required this.doctorId,
     required this.startsAt,
+    required this.durationMinutes,
     required this.status,
     required this.appointmentType,
     required this.notes,
@@ -1180,6 +1208,7 @@ class CachedAppointment extends DataClass
     map['patient_id'] = Variable<String>(patientId);
     map['doctor_id'] = Variable<String>(doctorId);
     map['starts_at'] = Variable<String>(startsAt);
+    map['duration_minutes'] = Variable<int>(durationMinutes);
     map['status'] = Variable<String>(status);
     map['appointment_type'] = Variable<String>(appointmentType);
     map['notes'] = Variable<String>(notes);
@@ -1194,6 +1223,7 @@ class CachedAppointment extends DataClass
       patientId: Value(patientId),
       doctorId: Value(doctorId),
       startsAt: Value(startsAt),
+      durationMinutes: Value(durationMinutes),
       status: Value(status),
       appointmentType: Value(appointmentType),
       notes: Value(notes),
@@ -1212,6 +1242,7 @@ class CachedAppointment extends DataClass
       patientId: serializer.fromJson<String>(json['patient_id']),
       doctorId: serializer.fromJson<String>(json['doctor_id']),
       startsAt: serializer.fromJson<String>(json['starts_at']),
+      durationMinutes: serializer.fromJson<int>(json['duration_minutes']),
       status: serializer.fromJson<String>(json['status']),
       appointmentType: serializer.fromJson<String>(json['appointment_type']),
       notes: serializer.fromJson<String>(json['notes']),
@@ -1227,6 +1258,7 @@ class CachedAppointment extends DataClass
       'patient_id': serializer.toJson<String>(patientId),
       'doctor_id': serializer.toJson<String>(doctorId),
       'starts_at': serializer.toJson<String>(startsAt),
+      'duration_minutes': serializer.toJson<int>(durationMinutes),
       'status': serializer.toJson<String>(status),
       'appointment_type': serializer.toJson<String>(appointmentType),
       'notes': serializer.toJson<String>(notes),
@@ -1240,6 +1272,7 @@ class CachedAppointment extends DataClass
     String? patientId,
     String? doctorId,
     String? startsAt,
+    int? durationMinutes,
     String? status,
     String? appointmentType,
     String? notes,
@@ -1250,6 +1283,7 @@ class CachedAppointment extends DataClass
     patientId: patientId ?? this.patientId,
     doctorId: doctorId ?? this.doctorId,
     startsAt: startsAt ?? this.startsAt,
+    durationMinutes: durationMinutes ?? this.durationMinutes,
     status: status ?? this.status,
     appointmentType: appointmentType ?? this.appointmentType,
     notes: notes ?? this.notes,
@@ -1262,6 +1296,9 @@ class CachedAppointment extends DataClass
       patientId: data.patientId.present ? data.patientId.value : this.patientId,
       doctorId: data.doctorId.present ? data.doctorId.value : this.doctorId,
       startsAt: data.startsAt.present ? data.startsAt.value : this.startsAt,
+      durationMinutes: data.durationMinutes.present
+          ? data.durationMinutes.value
+          : this.durationMinutes,
       status: data.status.present ? data.status.value : this.status,
       appointmentType: data.appointmentType.present
           ? data.appointmentType.value
@@ -1279,6 +1316,7 @@ class CachedAppointment extends DataClass
           ..write('patientId: $patientId, ')
           ..write('doctorId: $doctorId, ')
           ..write('startsAt: $startsAt, ')
+          ..write('durationMinutes: $durationMinutes, ')
           ..write('status: $status, ')
           ..write('appointmentType: $appointmentType, ')
           ..write('notes: $notes, ')
@@ -1294,6 +1332,7 @@ class CachedAppointment extends DataClass
     patientId,
     doctorId,
     startsAt,
+    durationMinutes,
     status,
     appointmentType,
     notes,
@@ -1308,6 +1347,7 @@ class CachedAppointment extends DataClass
           other.patientId == this.patientId &&
           other.doctorId == this.doctorId &&
           other.startsAt == this.startsAt &&
+          other.durationMinutes == this.durationMinutes &&
           other.status == this.status &&
           other.appointmentType == this.appointmentType &&
           other.notes == this.notes &&
@@ -1320,6 +1360,7 @@ class CachedAppointmentsCompanion extends UpdateCompanion<CachedAppointment> {
   final Value<String> patientId;
   final Value<String> doctorId;
   final Value<String> startsAt;
+  final Value<int> durationMinutes;
   final Value<String> status;
   final Value<String> appointmentType;
   final Value<String> notes;
@@ -1331,6 +1372,7 @@ class CachedAppointmentsCompanion extends UpdateCompanion<CachedAppointment> {
     this.patientId = const Value.absent(),
     this.doctorId = const Value.absent(),
     this.startsAt = const Value.absent(),
+    this.durationMinutes = const Value.absent(),
     this.status = const Value.absent(),
     this.appointmentType = const Value.absent(),
     this.notes = const Value.absent(),
@@ -1343,6 +1385,7 @@ class CachedAppointmentsCompanion extends UpdateCompanion<CachedAppointment> {
     required String patientId,
     required String doctorId,
     required String startsAt,
+    this.durationMinutes = const Value.absent(),
     required String status,
     required String appointmentType,
     this.notes = const Value.absent(),
@@ -1362,6 +1405,7 @@ class CachedAppointmentsCompanion extends UpdateCompanion<CachedAppointment> {
     Expression<String>? patientId,
     Expression<String>? doctorId,
     Expression<String>? startsAt,
+    Expression<int>? durationMinutes,
     Expression<String>? status,
     Expression<String>? appointmentType,
     Expression<String>? notes,
@@ -1374,6 +1418,7 @@ class CachedAppointmentsCompanion extends UpdateCompanion<CachedAppointment> {
       if (patientId != null) 'patient_id': patientId,
       if (doctorId != null) 'doctor_id': doctorId,
       if (startsAt != null) 'starts_at': startsAt,
+      if (durationMinutes != null) 'duration_minutes': durationMinutes,
       if (status != null) 'status': status,
       if (appointmentType != null) 'appointment_type': appointmentType,
       if (notes != null) 'notes': notes,
@@ -1388,6 +1433,7 @@ class CachedAppointmentsCompanion extends UpdateCompanion<CachedAppointment> {
     Value<String>? patientId,
     Value<String>? doctorId,
     Value<String>? startsAt,
+    Value<int>? durationMinutes,
     Value<String>? status,
     Value<String>? appointmentType,
     Value<String>? notes,
@@ -1400,6 +1446,7 @@ class CachedAppointmentsCompanion extends UpdateCompanion<CachedAppointment> {
       patientId: patientId ?? this.patientId,
       doctorId: doctorId ?? this.doctorId,
       startsAt: startsAt ?? this.startsAt,
+      durationMinutes: durationMinutes ?? this.durationMinutes,
       status: status ?? this.status,
       appointmentType: appointmentType ?? this.appointmentType,
       notes: notes ?? this.notes,
@@ -1425,6 +1472,9 @@ class CachedAppointmentsCompanion extends UpdateCompanion<CachedAppointment> {
     }
     if (startsAt.present) {
       map['starts_at'] = Variable<String>(startsAt.value);
+    }
+    if (durationMinutes.present) {
+      map['duration_minutes'] = Variable<int>(durationMinutes.value);
     }
     if (status.present) {
       map['status'] = Variable<String>(status.value);
@@ -1452,6 +1502,7 @@ class CachedAppointmentsCompanion extends UpdateCompanion<CachedAppointment> {
           ..write('patientId: $patientId, ')
           ..write('doctorId: $doctorId, ')
           ..write('startsAt: $startsAt, ')
+          ..write('durationMinutes: $durationMinutes, ')
           ..write('status: $status, ')
           ..write('appointmentType: $appointmentType, ')
           ..write('notes: $notes, ')
@@ -7156,6 +7207,7 @@ typedef $CachedAppointmentsCreateCompanionBuilder =
       required String patientId,
       required String doctorId,
       required String startsAt,
+      Value<int> durationMinutes,
       required String status,
       required String appointmentType,
       Value<String> notes,
@@ -7169,6 +7221,7 @@ typedef $CachedAppointmentsUpdateCompanionBuilder =
       Value<String> patientId,
       Value<String> doctorId,
       Value<String> startsAt,
+      Value<int> durationMinutes,
       Value<String> status,
       Value<String> appointmentType,
       Value<String> notes,
@@ -7248,6 +7301,11 @@ class $CachedAppointmentsFilterComposer
 
   ColumnFilters<String> get startsAt => $composableBuilder(
     column: $table.startsAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get durationMinutes => $composableBuilder(
+    column: $table.durationMinutes,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -7349,6 +7407,11 @@ class $CachedAppointmentsOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<int> get durationMinutes => $composableBuilder(
+    column: $table.durationMinutes,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get status => $composableBuilder(
     column: $table.status,
     builder: (column) => ColumnOrderings(column),
@@ -7413,6 +7476,11 @@ class $CachedAppointmentsAnnotationComposer
 
   GeneratedColumn<String> get startsAt =>
       $composableBuilder(column: $table.startsAt, builder: (column) => column);
+
+  GeneratedColumn<int> get durationMinutes => $composableBuilder(
+    column: $table.durationMinutes,
+    builder: (column) => column,
+  );
 
   GeneratedColumn<String> get status =>
       $composableBuilder(column: $table.status, builder: (column) => column);
@@ -7510,6 +7578,7 @@ class $CachedAppointmentsTableManager
                 Value<String> patientId = const Value.absent(),
                 Value<String> doctorId = const Value.absent(),
                 Value<String> startsAt = const Value.absent(),
+                Value<int> durationMinutes = const Value.absent(),
                 Value<String> status = const Value.absent(),
                 Value<String> appointmentType = const Value.absent(),
                 Value<String> notes = const Value.absent(),
@@ -7521,6 +7590,7 @@ class $CachedAppointmentsTableManager
                 patientId: patientId,
                 doctorId: doctorId,
                 startsAt: startsAt,
+                durationMinutes: durationMinutes,
                 status: status,
                 appointmentType: appointmentType,
                 notes: notes,
@@ -7534,6 +7604,7 @@ class $CachedAppointmentsTableManager
                 required String patientId,
                 required String doctorId,
                 required String startsAt,
+                Value<int> durationMinutes = const Value.absent(),
                 required String status,
                 required String appointmentType,
                 Value<String> notes = const Value.absent(),
@@ -7545,6 +7616,7 @@ class $CachedAppointmentsTableManager
                 patientId: patientId,
                 doctorId: doctorId,
                 startsAt: startsAt,
+                durationMinutes: durationMinutes,
                 status: status,
                 appointmentType: appointmentType,
                 notes: notes,

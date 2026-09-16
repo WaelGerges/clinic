@@ -34,10 +34,51 @@ class SupabaseClinicGateway
         ClinicAdministration,
         ClinicAuditGateway,
         ClinicDeliveryGateway,
-        ClinicDocumentGateway {
+        ClinicDocumentGateway,
+        ClinicSchedulingGateway,
+        ClinicVisitExportGateway {
   SupabaseClinicGateway(this.client, {this.onSessionVerified});
   final SupabaseClient client;
   final Future<void> Function(ClinicSession session)? onSessionVerified;
+  @override
+  Future<Visit> printableVisit(
+    String clinicId,
+    String patientId,
+    String visitId,
+  ) async {
+    final row = await client
+        .from('visit_details')
+        .select()
+        .eq('clinic_id', clinicId)
+        .eq('patient_id', patientId)
+        .eq('id', visitId)
+        .single();
+    return Visit.fromMap(row);
+  }
+
+  @override
+  Future<Map<String, dynamic>> schedule(
+    String clinicId,
+    String doctorId,
+    String action,
+    Map<String, dynamic> payload,
+  ) async {
+    try {
+      final value = await client.rpc(
+        'clinic_schedule',
+        params: {
+          'p_clinic_id': clinicId,
+          'p_doctor_id': doctorId,
+          'p_action': action,
+          'p_payload': payload,
+        },
+      );
+      return Map<String, dynamic>.from(value as Map);
+    } on PostgrestException catch (e) {
+      throw ClinicFailure(e.message, schedulingError(e.message));
+    }
+  }
+
   @override
   Future<void> verifySession(ClinicSession session) async {
     final row = await client
@@ -474,6 +515,14 @@ class SupabaseClinicGateway
             : Map<String, dynamic>.from(value['appointment'] as Map),
       );
     } on PostgrestException catch (e) {
+      if ([
+        'SLOT_UNAVAILABLE',
+        'OUTSIDE_WORKING_HOURS',
+        'INVALID_DURATION',
+        'PAST_APPOINTMENT',
+      ].contains(e.message)) {
+        throw ClinicFailure(e.message, schedulingError(e.message));
+      }
       if (e.message == 'VERSION_CONFLICT') {
         Map<String, dynamic> remote = {};
         try {
@@ -512,6 +561,8 @@ class SupabaseClinicGateway
             'Completed records cannot be overwritten. An amendment is required.',
         'VISIT_NOT_COMPLETED':
             'Only a completed visit can receive an amendment.',
+        'AMENDMENT_NOT_ASSIGNED_DOCTOR':
+            'Only the doctor who recorded this visit can amend it.',
         'AMENDMENT_REASON_REQUIRED':
             'Explain the amendment in 10 to 1000 characters.',
         'INVALID_AMENDMENT':
@@ -678,3 +729,18 @@ class SupabaseClinicGateway
     return controller.stream;
   }
 }
+
+String schedulingError(String code) => switch (code) {
+  'SLOT_UNAVAILABLE' =>
+    'This time overlaps another appointment. Choose an available slot.',
+  'OUTSIDE_WORKING_HOURS' =>
+    'Choose a time within the doctor’s working hours and outside breaks.',
+  'INVALID_DURATION' => 'Choose a duration between 5 and 240 minutes.',
+  'PAST_APPOINTMENT' => 'Choose a future appointment time.',
+  'FORBIDDEN' => 'You do not have permission to change this schedule.',
+  'INVALID_SCHEDULE' =>
+    'Check working hours and breaks. Periods must not overlap.',
+  'EMPTY_SCHEDULE' =>
+    'Add at least one working period, or clear the working hours so any time can be booked.',
+  _ => 'Scheduling could not be updated. Refresh and try again.',
+};

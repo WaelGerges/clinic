@@ -685,6 +685,9 @@ void main() {
       await first.db.customStatement(
         'ALTER TABLE cached_visits DROP COLUMN current_revision',
       );
+      await first.db.customStatement(
+        'ALTER TABLE cached_appointments DROP COLUMN duration_minutes',
+      );
       await first.db.customStatement('PRAGMA user_version=1');
       await first.close();
       final bytes = await file.readAsBytes();

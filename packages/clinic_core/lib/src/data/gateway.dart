@@ -123,3 +123,20 @@ abstract interface class ClinicDocumentGateway {
   Future<Uint8List> downloadDocument(String objectPath);
   Future<ClinicDocument> setDocumentArchived(String id, bool archived);
 }
+
+abstract interface class ClinicSchedulingGateway {
+  Future<Map<String, dynamic>> schedule(
+    String clinicId,
+    String doctorId,
+    String action,
+    Map<String, dynamic> payload,
+  );
+}
+
+abstract interface class ClinicVisitExportGateway {
+  Future<Visit> printableVisit(
+    String clinicId,
+    String patientId,
+    String visitId,
+  );
+}

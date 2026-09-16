@@ -1,8 +1,47 @@
 # Clinic Apps — Implementation Status
 
-Last updated: 2 September 2026
+Last updated: 12 September 2026
 
 This is the persistent execution checkpoint. Update it whenever work changes state, verification changes, and before stopping. `CONTINUE-HERE.md` contains the broader architecture and operating context.
+
+
+## 12 September 2026 correction pass
+
+A review of the local working tree found defects in the 12 September feature work and in earlier deployed behaviour. All are fixed locally; verification is 50/50 Flutter tests, 34/34 backend tests and clean static analysis.
+
+**Arabic completeness.** Every string that reaches `tr()` at runtime now has a translation: 556 keys covering 502 sinks, up from 389 covering ~390. The large gap was the data layer — `safeError()` forwards every `ClinicFailure.message` into `tr()`, and none of those ~110 messages had an Arabic entry, so any error or validation message appeared in English while the app was in Arabic. Also fixed: eight `tr()` call sites that received an already-interpolated string and so could never match a key, runtime values (`actor_role`, `object_type`, outbox `entity_type`/`action`/`state`, membership role, document category and state) that were substituted untranslated, two untranslated `Semantics` labels, and one raw `Text` literal. `test/translation_coverage_test.dart` scans the source for every sink and fails if any string lacks an entry, so this cannot silently regress.
+
+**Rejected requests no longer block the queue.** A `failed` outbox row halted every later operation, document upload and shared action, and nothing could clear it short of wiping app data. `ClinicRepository.discardRejectedOperation` discards a request the server definitively rejected — only the `failed` state, which is reached solely after a non-transient rejection, so the request was never applied — then restores the record from the server so the next save carries the version the server holds. The synchronization screen exposes it with a confirmation.
+
+**Patient reconciliation.** `refresh()` read only the first page of active patients, so records beyond the first 50 were never updated and an archive performed on another device was never observed at all. `reconcilePatients()` now pages through active and archived patients, bounded to 40 pages per state, on startup, on manual refresh and at most every five minutes from the Realtime path.
+
+**Other client fixes.** Assistants bind to a deterministically ordered doctor instead of an arbitrary row; the scheduling waitlist resolves patients from the server when they are not cached; PDF text direction follows the document language so a mixed-script line no longer flips; PDF numerals are normalized to Western digits.
+
+**Pending migration.** `supabase/migrations/20260912164500_clinic_amendment_queue_and_schedule_fixes.sql` is written and passes locally but is **not deployed**; deployment needs explicit approval.
+
+- Only the visit's own doctor may amend it. The deployed function checks the clinic doctor role only, so any active doctor can amend any completed visit — contrary to what this document and `README.md` previously claimed. Regression test included.
+- A patient with the doctor can return to the queue or be cancelled. Previously the only exit from `withDoctor` was completing a visit with a diagnosis, so a mis-sent patient or a walkout held the doctor's only active slot indefinitely.
+- An accepted `send` replays its stored receipt before the freshness and presence checks. The deployed wrapper checked expiry and presence first, so retrying an already-committed handoff reported a failure.
+- An empty working-period list is rejected, and `settings_clear` returns to the unconfigured state. Saving an empty list silently closed the clinic to every booking with no way back.
+- Stale presence leases and expired document access grants are pruned on the paths that create them. Leases referenced by an immutable receipt are retained so the receipt's foreign key holds.
+
+**Not addressed.** The server still verifies only the size of an uploaded object, not its SHA-256, which is not computable in SQL. Orphaned Storage bytes from abandoned staging still cannot be removed — adding a delete path to clinical storage was judged too risky to do unprompted. A multi-doctor picker for assistants needs the server to expose doctor display names, which assistants cannot currently read.
+
+## 12 September 2026 feature update
+
+Arabic/English selection with RTL, duration-aware scheduling with weekly working periods/breaks and a cancellation waitlist, and bilingual printable visit documents are implemented locally. See `docs/bilingual-scheduling-printing.md` for usage and boundaries. Local cache schema is now v5; duration defaults to 30 minutes for existing appointments.
+
+Verification: 48/48 Flutter tests and 28/28 backend tests passed. Workspace static analysis and the final document-file analysis passed; `git diff --check` passed. Both Android development debug APKs built successfully and were staged in `dist/android-dev/clinic-assistant-dev.apk` and `dist/android-dev/clinic-doctor-dev.apk`. Six fictional PDF samples were generated in both languages and visually inspected; mixed-direction Arabic text and page grouping were corrected.
+
+**Deployment completed:** The user explicitly approved the development migration on 12 September 2026. `clinic_smart_scheduling` was applied to `clinic-chatgpt-dev` (`geikkygtnsgbtajyqdvc`) as version `20260912110955`. The local migration filename was aligned with the hosted version without changing the SQL. SHA-256: `226ACD93CDDFE9E4761E55E6ECF9595DE74DD4CC9C23CE7407250DC275FEBB4E`.
+
+Hosted verification confirmed `appointments.duration_minutes` is a non-null integer defaulting to 30, the booking-validation trigger is enabled, the command persists durations, both new private tables have RLS and deny direct authenticated SELECT/INSERT, and the scheduling RPC permits authenticated calls while denying anonymous execution. Ten migrations are now deployed. Physical two-device scheduling acceptance remains outstanding.
+
+Advisors: no security ERROR findings or performance WARN/ERROR findings. Private tables have intentional default-deny RLS INFO notices; unused-index INFO notices are expected. A separate Auth WARN reports disabled leaked-password protection; it was not changed by this migration. Remediation: https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection
+
+Final APK SHA-256: Assistant `30151A2179972AF4EAD42BA696BBF2306E937A8DC9E05967D0EA54C8955DED42` (221,887,396 bytes); Doctor `418951F3B259EA81050C19F8A46C1CA9CB21D97A85DDCF10EB699757867C18F2` (254,489,608 bytes). These supersede the older artifact records below. No installation into existing devices was performed in this update.
+
+The previously documented Auth, offline-delta and production-readiness limitations still apply. No production release or physical printer/iOS acceptance is claimed.
 
 ## Safety and target
 
@@ -17,7 +56,7 @@ This is the persistent execution checkpoint. Update it whenever work changes sta
 ### Architecture and hosted database
 
 - Separate Clinic Assistant and Clinic Doctor Flutter applications share `packages/clinic_core` and one clinic-isolated Supabase backend.
-- Nine local migrations are deployed to the approved hosted project under matching versions:
+- Ten local migrations are deployed to the approved hosted project under matching versions:
 
 | Version | Migration | SHA-256 |
 |---|---|---|
@@ -30,6 +69,7 @@ This is the persistent execution checkpoint. Update it whenever work changes sta
 | `20260829093430` | `clinic_visit_amendments` | `4C988C91B0636D564E9CAC9E601B4D36F14A78E1B44554113A29461C277ABD31` |
 | `20260829160124` | `clinic_doctor_delivery_receipts` | `807887A7C3850AA25BEDFB8061F1F06EC9CE10EB3D91DF533D9283ADF7BDC9F4` |
 | `20260829160304` | `clinic_delivery_receipt_hardening` | `66CF9155A70D42590592EA36BE0A002541B9A2B71C6CA017D13A0A9A9CA509E1` |
+| `20260912110955` | `clinic_smart_scheduling` | `226ACD93CDDFE9E4761E55E6ECF9595DE74DD4CC9C23CE7407250DC275FEBB4E` |
 
 - Clinic membership IDs, RLS, restrictive grants, validated RPCs, idempotent operation receipts, private Storage policies, private security-definer implementations, public security-invoker wrappers, and Realtime invalidation enforce the current backend boundary.
 - The latest hosted review found both new private delivery tables empty, RLS enabled, and no direct authenticated SELECT/INSERT privileges. Security advisors have no ERROR/WARN findings. Performance advisors have no unindexed foreign keys; unused-index INFO notices are expected in the empty development database.

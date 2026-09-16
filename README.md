@@ -10,7 +10,7 @@ The only permitted backend is **clinic-chatgpt-dev**, project `geikkygtnsgbtajyq
 
 `config/development.json` contains the ignored public project URL and publishable key. No service-role, database, or administrator secret belongs in Flutter or a build argument.
 
-Nine migrations are deployed: the foundation; staff invitations and Realtime publication; membership-policy query optimization; private document storage and indexes; visit indexes; immutable completed-visit amendments; and hardened Doctor presence/explicit appointment receipts. See [CONTINUE-HERE.md](CONTINUE-HERE.md) for versions, hashes, hosted checks, and remaining gates.
+Ten migrations are deployed: the foundation; staff invitations and Realtime publication; membership-policy query optimization; private document storage and indexes; visit indexes; immutable completed-visit amendments; and hardened Doctor presence/explicit appointment receipts. See [CONTINUE-HERE.md](CONTINUE-HERE.md) for versions, hashes, hosted checks, and remaining gates.
 
 ## Toolchain and commands
 
@@ -47,6 +47,8 @@ Android compiles against API 37.0 and supports API 24 or newer. Release signing 
 
 ## Implemented
 
+- Arabic/English selection with RTL layouts; appointment durations, weekly working periods, breaks and cancellation waitlist; printable prescriptions, visit summaries and doctor referral letters. See [feature guide](docs/bilingual-scheduling-printing.md). The shared scheduling migration is deployed to the development backend and its schema and access controls are verified.
+
 - Email/password entry, registration, clinic creation/selection, verified-email invitation join, staff access controls, secure session storage, and per-app password-recovery callback handling.
 - Patient create/edit/search/archive/restore, appointment workflow, atomic queue handoff, doctor workspace, consultations, diagnoses, prescriptions, and retained visit revisions.
 - Doctor-only, append-only amendments of completed visits with mandatory reason, version checks, exact idempotent replay, and retained prior clinical rows.
@@ -56,7 +58,7 @@ Android compiles against API 37.0 and supports API 24 or newer. Release signing 
 - Foreground Doctor-device presence leases and explicit, immutable appointment receipt acknowledgement; Assistant handoff requires fresh presence and displays assignment separately from receipt.
 - Android backup/cleartext disabled and sensitive-screen screenshot protection. Camera and photo-library usage descriptions are present on iOS.
 
-The latest local result is 45/45 Flutter tests, 27/27 backend tests, clean static analysis, two successful clean development debug APK builds, and native Android cold-start/routing checks.
+The latest local result is 50/50 Flutter tests, 34/34 backend tests, and clean static analysis. The APK figures below predate the 12 September correction work and have not been rebuilt.
 
 ## Required before any real use
 

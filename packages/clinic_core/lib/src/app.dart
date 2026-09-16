@@ -1,3 +1,5 @@
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'presentation/language.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -22,6 +24,7 @@ import 'features/sync/patient_sync_screen.dart';
 
 Future<void> launchClinicApp(AppKind kind) async {
   WidgetsFlutterBinding.ensureInitialized();
+  await loadLanguage();
   const url = String.fromEnvironment('SUPABASE_URL'),
       key = String.fromEnvironment('SUPABASE_PUBLISHABLE_KEY');
   SupabaseClient? client;
@@ -98,7 +101,18 @@ class _ClinicBootstrapState extends State<ClinicBootstrap> {
   Timer? accessTimer;
   bool busy = false;
   @override
+  void initState() {
+    super.initState();
+    appLanguage.addListener(languageChanged);
+  }
+
+  void languageChanged() {
+    if (mounted) setState(() {});
+  }
+
+  @override
   void dispose() {
+    appLanguage.removeListener(languageChanged);
     unawaited(repository?.close());
     accessTimer?.cancel();
     widget.passwordRecovery.dispose();
@@ -220,6 +234,9 @@ class _ClinicBootstrapState extends State<ClinicBootstrap> {
       title: widget.kind == AppKind.doctor
           ? 'Clinic Doctor'
           : 'Clinic Assistant',
+      locale: appLanguage.value,
+      supportedLocales: const [Locale('en'), Locale('ar')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       debugShowCheckedModeBanner: false,
       theme: clinicTheme(Brightness.light),
       darkTheme: clinicTheme(Brightness.dark),
@@ -233,6 +250,7 @@ class _ClinicBootstrapState extends State<ClinicBootstrap> {
               onDemo: kDebugMode ? demo : null,
             )
           : Scaffold(
+              appBar: AppBar(title: const LanguagePicker()),
               body: SafeArea(
                 child: Center(
                   child: ConstrainedBox(
@@ -249,9 +267,11 @@ class _ClinicBootstrapState extends State<ClinicBootstrap> {
                           ? FilledButton(
                               onPressed: busy ? null : demo,
                               child: Text(
-                                busy
-                                    ? 'Opening…'
-                                    : 'Open fictional local preview',
+                                tr(
+                                  busy
+                                      ? 'Opening…'
+                                      : 'Open fictional local preview',
+                                ),
                               ),
                             )
                           : null,
@@ -280,6 +300,10 @@ class ClinicApp extends StatefulWidget {
 
 class _ClinicAppState extends State<ClinicApp> with WidgetsBindingObserver {
   ThemeMode mode = ThemeMode.system;
+  void languageChanged() {
+    if (mounted) setState(() {});
+  }
+
   Timer? presenceTimer;
   late final GoRouter router = GoRouter(
     routes: [
@@ -336,6 +360,7 @@ class _ClinicAppState extends State<ClinicApp> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    appLanguage.addListener(languageChanged);
     WidgetsBinding.instance.addObserver(this);
     startPresence();
   }
@@ -357,6 +382,7 @@ class _ClinicAppState extends State<ClinicApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     presenceTimer?.cancel();
+    appLanguage.removeListener(languageChanged);
     WidgetsBinding.instance.removeObserver(this);
     router.dispose();
     super.dispose();
@@ -381,6 +407,9 @@ class _ClinicAppState extends State<ClinicApp> with WidgetsBindingObserver {
       title: widget.kind == AppKind.doctor
           ? 'Clinic Doctor'
           : 'Clinic Assistant',
+      locale: appLanguage.value,
+      supportedLocales: const [Locale('en'), Locale('ar')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       debugShowCheckedModeBanner: false,
       theme: clinicTheme(Brightness.light),
       darkTheme: clinicTheme(Brightness.dark),

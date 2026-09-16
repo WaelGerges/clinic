@@ -2,6 +2,10 @@
 
 Updated 29 August 2026 after direct implementation, hosted migrations, Android runtime checks, and documentation reconciliation. Continue in `C:\waelg\projects\clinic-chatgpt`; this directory is the source of truth. Do not republish an older staging copy over it.
 
+**12 September 2026 — correction pass.** A review of the local tree found six defects; all are fixed locally and covered by tests. Client-side: complete Arabic coverage for every string reaching `tr()` (including every `ClinicFailure` message, previously all English) with a guard test; a way to discard a server-rejected outbox request, which used to block the queue permanently with no recovery; patient reconciliation that pages through active *and* archived records instead of the first 50 active only; deterministic doctor binding for assistants; and PDF direction/numeral corrections. Server-side: `supabase/migrations/20260912164500_clinic_amendment_queue_and_schedule_fixes.sql` adds the assigned-doctor amendment check, an exit from `withDoctor`, receipt-replay-before-presence for `send`, rejection of an empty working-period list plus an explicit `settings_clear`, and bounded pruning of stale presence/grant rows. **This migration is NOT deployed** — it needs explicit approval. Until then the hosted behaviour is the old behaviour.
+
+**12 September 2026 update:** Arabic/English, smarter scheduling and printable visit documents are implemented. Ten migrations are deployed, including `20260912110955_clinic_smart_scheduling.sql`; hosted schema and access checks passed after explicit user approval. See `IMPLEMENTATION_STATUS.md` and `docs/bilingual-scheduling-printing.md` for the current checkpoint and new APKs. The older tables and test counts below describe the August checkpoint.
+
 ## Non-negotiable guardrails
 
 - Development and tests use fictional data only. This is not a production or compliance-approved clinical system.
@@ -31,12 +35,13 @@ All local migrations below are deployed to the approved project under the matchi
 | `20260829093430` | `clinic_visit_amendments` | `4C988C91B0636D564E9CAC9E601B4D36F14A78E1B44554113A29461C277ABD31` |
 | `20260829160124` | `clinic_doctor_delivery_receipts` | `807887A7C3850AA25BEDFB8061F1F06EC9CE10EB3D91DF533D9283ADF7BDC9F4` |
 | `20260829160304` | `clinic_delivery_receipt_hardening` | `66CF9155A70D42590592EA36BE0A002541B9A2B71C6CA017D13A0A9A9CA509E1` |
+| `20260912110955` | `clinic_smart_scheduling` | `226ACD93CDDFE9E4761E55E6ECF9595DE74DD4CC9C23CE7407250DC275FEBB4E` |
 
-The last hosted verification found no Auth users or application records; the new presence and receipt tables are empty, RLS-enabled, and have no direct authenticated read/write privileges. Security advisors have no ERROR/WARN findings. The remaining INFO notices are intentional default-deny private tables with no client policies. Performance advisors have no unindexed foreign keys; remaining INFO findings are unused indexes on the empty development database.
+The hosted project **does** hold fictional development data as of 12 September 2026: 3 Auth users, 1 clinic, 3 memberships, 103 patients (98 of them the `FICTIONAL-SEED-2026-09-02` set), 7 appointments, 1 visit, 1 attachment with its Storage object, 34 audit events, 23 operation receipts and 3 presence rows. Do not reset it on the assumption that it is empty. The private tables are RLS-enabled with no direct authenticated read/write privileges. Security advisors report no ERROR findings; there is one WARN, leaked-password protection disabled in Auth. The remaining INFO notices are intentional default-deny private tables with no client policies. Performance advisors have no unindexed foreign keys; remaining INFO findings are unused indexes.
 
 Private document bytes use the non-public `clinic-documents` bucket. Storage writes require exact pending metadata/path/actor checks. Reads require current authorization plus a 90-second audited lease. Metadata, digest, size, clinic/patient/visit identity, and object existence are rechecked around upload/download/finalization.
 
-Completed visit amendments route through `public.clinic_apply_command` to a search-path-locked private security-definer function. Only the assigned doctor can amend a completed visit. The request is online-only, versioned, expires if first submitted after one minute, requires a 10–1000 character reason and a diagnosis, returns exact idempotent replay, appends a new revision, and retains old revisions/diagnoses/prescriptions/items.
+Completed visit amendments route through `public.clinic_apply_command` to a search-path-locked private security-definer function. The **deployed** function checks only the clinic doctor role, so any active doctor of the clinic can amend any completed visit; restricting this to the visit's own doctor is in the pending `20260912164500` migration and is not live yet. The request is online-only, versioned, expires if first submitted after one minute, requires a 10–1000 character reason and a diagnosis, returns exact idempotent replay, appends a new revision, and retains old revisions/diagnoses/prescriptions/items.
 
 Doctor devices use a protected persistent UUID and publish a server-timestamped 60-second presence lease immediately and every 20 seconds while foregrounded. Assistant handoff requires a fresh lease. Assignment and explicit receipt are separate server states: the assigned Doctor device must acknowledge the exact appointment/version before consultation opens. Receipts are clinic/doctor/device-bound, idempotent, immutable, retained, and audited. Privileged implementations live in `clinic_private`; exposed public RPCs are security-invoker wrappers.
 
@@ -66,14 +71,14 @@ This environment exposed database/Storage migration tools but no Auth-settings m
 
 | Check | Result |
 |---|---|
-| Flutter tests | 45/45 pass across domain, secure access-lease, encrypted-cache/repository, recovery, amendment, audit, presence/receipt, accessibility/layout, and screen flows |
-| Backend tests | 27/27 PGlite tests pass across default ACLs, isolation, staff revocation, commands, documents, amendments, and Doctor presence/receipt |
+| Flutter tests | 50/50 pass across domain, secure access-lease, encrypted-cache/repository, recovery, amendment, audit, presence/receipt, accessibility/layout, screen flows, and Arabic translation coverage |
+| Backend tests | 34/34 PGlite tests pass across default ACLs, isolation, staff revocation, commands, documents, amendments, Doctor presence/receipt, scheduling, and the 12 September correction regressions |
 | Static analysis | Clean after the presence/receipt implementation |
-| Hosted schema | Nine matching migrations deployed; no hosted application data created |
+| Hosted schema | Ten matching migrations deployed. `20260912164500_clinic_amendment_queue_and_schedule_fixes.sql` is written and passes locally but is **not deployed**; it needs explicit approval |
 | Advisors | No security ERROR/WARN; no unindexed foreign keys |
 | Android builds | Assistant and Doctor debug APKs built with `config/development.json` |
 | Android runtime | Both clean-rebuilt APKs freshly installed and cold-started; Dart VM/Supabase initialization confirmed without kernel/isolate errors; both custom callback schemes routed to their own activity; Assistant document selection/staging/PDF preview was previously exercised with a fictional file |
-| Authenticated cloud workflow | Not tested; no owned verified test accounts were created |
+| Authenticated cloud workflow | Exercised against the hosted project on 30 August 2026: clinic created, assistant invited and joined, patient saved, queue handoff sent, Doctor receipt acknowledged, visit completed, attachment staged and finalized. Two-device acceptance is still outstanding |
 | iOS | Not built or run; macOS/Xcode/signing required |
 
 Current debug APKs:

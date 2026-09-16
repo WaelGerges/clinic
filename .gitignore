@@ -34,3 +34,6 @@ supabase/.branches/
 **/GeneratedPluginRegistrant.*
 **/Generated.xcconfig
 **/flutter_export_environment.sh
+
+# Generated fictional verification documents
+tmp/

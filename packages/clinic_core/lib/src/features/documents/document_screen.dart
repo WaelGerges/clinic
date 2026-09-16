@@ -1,3 +1,4 @@
+import 'package:clinic_core/src/presentation/language.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
@@ -55,7 +56,8 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
     } catch (_) {
       if (mounted) {
         setState(() {
-          warning = 'A previously interrupted camera import could not be recovered.';
+          warning =
+              'A previously interrupted camera import could not be recovered.';
         });
       }
     }
@@ -87,23 +89,23 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const ListTile(
-              title: Text('Add patient document'),
-              subtitle: Text('JPEG, PNG, WebP, or PDF · maximum 20 MB'),
+            ListTile(
+              title: Text(tr('Add patient document')),
+              subtitle: Text(tr('JPEG, PNG, WebP, or PDF · maximum 20 MB')),
             ),
             ListTile(
               leading: const Icon(Icons.folder_open_outlined),
-              title: const Text('Choose file'),
+              title: Text(tr('Choose file')),
               onTap: () => Navigator.pop(context, _DocumentSource.file),
             ),
             ListTile(
               leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Take photo'),
+              title: Text(tr('Take photo')),
               onTap: () => Navigator.pop(context, _DocumentSource.camera),
             ),
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
-              title: const Text('Choose photo'),
+              title: Text(tr('Choose photo')),
               onTap: () => Navigator.pop(context, _DocumentSource.gallery),
             ),
           ],
@@ -138,9 +140,9 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
       }
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(safeError(error))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(tr(safeError(error)))));
       }
     } finally {
       if (mounted) setState(() => adding = false);
@@ -190,8 +192,10 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
     );
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Document protected locally and queued for upload.'),
+        SnackBar(
+          content: Text(
+            tr('Document protected locally and queued for upload.'),
+          ),
         ),
       );
       setState(() {});
@@ -211,9 +215,9 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
       );
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(safeError(error))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(tr(safeError(error)))));
       }
     }
   }
@@ -222,18 +226,20 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Share a medical document?'),
-        content: const Text(
-          'The selected external app may keep a copy outside the clinic’s protected storage. Confirm the recipient before sending.',
+        title: Text(tr('Share a medical document?')),
+        content: Text(
+          tr(
+            'The selected external app may keep a copy outside the clinic’s protected storage. Confirm the recipient before sending.',
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(tr('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Continue'),
+            child: Text(tr('Continue')),
           ),
         ],
       ),
@@ -245,7 +251,10 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
           .read(repositoryProvider)
           .documentContent(value.id, purpose: 'share');
       final directory = await getTemporaryDirectory();
-      final safeName = value.fileName.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
+      final safeName = value.fileName.replaceAll(
+        RegExp(r'[^a-zA-Z0-9._-]'),
+        '_',
+      );
       temporary = File(
         p.join(directory.path, 'clinic_${const Uuid().v4()}_$safeName'),
       );
@@ -270,9 +279,9 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
       );
     } catch (error) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(safeError(error))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(tr(safeError(error)))));
       }
     } finally {
       try {
@@ -287,35 +296,35 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(value.isArchived ? 'Restore document?' : 'Archive document?'),
+        title: Text(
+          tr(value.isArchived ? 'Restore document?' : 'Archive document?'),
+        ),
         content: Text(
-          value.isArchived
-              ? 'The document will return to the patient record.'
-              : 'The protected object is retained, but normal access is revoked immediately.',
+          tr(
+            value.isArchived
+                ? 'The document will return to the patient record.'
+                : 'The protected object is retained, but normal access is revoked immediately.',
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(tr('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: Text(value.isArchived ? 'Restore' : 'Archive'),
+            child: Text(tr(value.isArchived ? 'Restore' : 'Archive')),
           ),
         ],
       ),
     );
     if (confirmed != true || !mounted) return;
-    await runAction(
-      context,
-      () async {
-        await ref
-            .read(repositoryProvider)
-            .setDocumentArchived(value, !value.isArchived);
-        if (mounted) setState(() {});
-      },
-      success: value.isArchived ? 'Document restored.' : 'Document archived.',
-    );
+    await runAction(context, () async {
+      await ref
+          .read(repositoryProvider)
+          .setDocumentArchived(value, !value.isArchived);
+      if (mounted) setState(() {});
+    }, success: value.isArchived ? 'Document restored.' : 'Document archived.');
   }
 
   @override
@@ -335,9 +344,9 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
             children: [
               if (warning != null)
                 MaterialBanner(
-                  content: Text(warning!),
+                  content: Text(tr(warning!)),
                   actions: [
-                    TextButton(onPressed: refresh, child: const Text('Retry')),
+                    TextButton(onPressed: refresh, child: Text(tr('Retry'))),
                   ],
                 ),
               Padding(
@@ -346,9 +355,15 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
                   children: [
                     Expanded(
                       child: SegmentedButton<bool>(
-                        segments: const [
-                          ButtonSegment(value: false, label: Text('Current')),
-                          ButtonSegment(value: true, label: Text('Archived')),
+                        segments: [
+                          ButtonSegment(
+                            value: false,
+                            label: Text(tr('Current')),
+                          ),
+                          ButtonSegment(
+                            value: true,
+                            label: Text(tr('Archived')),
+                          ),
                         ],
                         selected: {archived},
                         onSelectionChanged: (value) {
@@ -357,7 +372,7 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
                       ),
                     ),
                     IconButton(
-                      tooltip: 'Refresh documents',
+                      tooltip: tr('Refresh documents'),
                       onPressed: refreshing ? null : refresh,
                       icon: refreshing
                           ? const SizedBox.square(
@@ -376,9 +391,11 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
                         title: archived
                             ? 'No archived documents'
                             : 'No documents yet',
-                        message: archived
-                            ? 'Archived documents remain protected and can be restored here.'
-                            : 'Add an image or PDF. It is encrypted locally before upload.',
+                        message: tr(
+                          archived
+                              ? 'Archived documents remain protected and can be restored here.'
+                              : 'Add an image or PDF. It is encrypted locally before upload.',
+                        ),
                       )
                     : ListView.separated(
                         padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
@@ -388,7 +405,9 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
                           final value = values[index];
                           return Card(
                             child: ListTile(
-                              onTap: value.isArchived ? null : () => preview(value),
+                              onTap: value.isArchived
+                                  ? null
+                                  : () => preview(value),
                               leading: Icon(
                                 value.isPdf
                                     ? Icons.picture_as_pdf_outlined
@@ -400,11 +419,19 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                               subtitle: Text(
-                                '${value.category.label} · ${_formatBytes(value.bytes)} · ${DateFormat.yMMMd().format(ClinicTime.local(value.createdAt))}\n${_stateLabel(value.state)}${value.clinical ? ' · Clinical' : ''}',
+                                tr("{0} · {1} · {2}\n{3}{4}", [
+                                  tr(value.category.label),
+                                  _formatBytes(value.bytes),
+                                  DateFormat.yMMMd().format(
+                                    ClinicTime.local(value.createdAt),
+                                  ),
+                                  tr(_stateLabel(value.state)),
+                                  value.clinical ? tr(' · Clinical') : '',
+                                ]),
                               ),
                               isThreeLine: true,
                               trailing: PopupMenuButton<String>(
-                                tooltip: 'Document actions',
+                                tooltip: tr('Document actions'),
                                 onSelected: (action) async {
                                   switch (action) {
                                     case 'preview':
@@ -423,25 +450,29 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
                                 },
                                 itemBuilder: (_) => [
                                   if (!value.isArchived)
-                                    const PopupMenuItem(
+                                    PopupMenuItem(
                                       value: 'preview',
-                                      child: Text('Preview'),
+                                      child: Text(tr('Preview')),
                                     ),
                                   if (value.isReady && !value.isArchived)
-                                    const PopupMenuItem(
+                                    PopupMenuItem(
                                       value: 'share',
-                                      child: Text('Share / save copy'),
+                                      child: Text(tr('Share / save copy')),
                                     ),
                                   if (value.state == 'failed')
-                                    const PopupMenuItem(
+                                    PopupMenuItem(
                                       value: 'retry',
-                                      child: Text('Retry upload'),
+                                      child: Text(tr('Retry upload')),
                                     ),
                                   if (value.isReady || value.isArchived)
                                     PopupMenuItem(
                                       value: 'archive',
                                       child: Text(
-                                        value.isArchived ? 'Restore' : 'Archive',
+                                        tr(
+                                          value.isArchived
+                                              ? 'Restore'
+                                              : 'Archive',
+                                        ),
                                       ),
                                     ),
                                 ],
@@ -461,7 +492,8 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
                   right: 18,
                   bottom: 18,
                   child: FloatingActionButton.extended(
-                    heroTag: 'document-add-${widget.patientId}-${widget.visitId}',
+                    heroTag:
+                        'document-add-${widget.patientId}-${widget.visitId}',
                     onPressed: adding ? null : chooseSource,
                     icon: adding
                         ? const SizedBox.square(
@@ -469,7 +501,7 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.add),
-                    label: const Text('Add document'),
+                    label: Text(tr('Add document')),
                   ),
                 ),
             ],
@@ -497,10 +529,10 @@ class DocumentPreviewScreen extends StatelessWidget {
                   content.data,
                   fit: BoxFit.contain,
                   gaplessPlayback: true,
-                  errorBuilder: (_, _, _) => const EmptyPanel(
+                  errorBuilder: (_, _, _) => EmptyPanel(
                     icon: Icons.broken_image_outlined,
                     title: 'Image preview failed',
-                    message: 'The protected file was retained.',
+                    message: tr('The protected file was retained.'),
                   ),
                 ),
               ),
@@ -545,17 +577,13 @@ class _DocumentMetadataDialogState extends State<_DocumentMetadataDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: const Text('Document details'),
+    title: Text(tr('Document details')),
     content: SingleChildScrollView(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            widget.fileName,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
+          Text(widget.fileName, maxLines: 2, overflow: TextOverflow.ellipsis),
           Text(
             _formatBytes(widget.bytes),
             style: Theme.of(context).textTheme.bodySmall,
@@ -563,10 +591,10 @@ class _DocumentMetadataDialogState extends State<_DocumentMetadataDialog> {
           const SizedBox(height: 16),
           DropdownButtonFormField<ClinicDocumentCategory>(
             initialValue: category,
-            decoration: const InputDecoration(labelText: 'Category'),
+            decoration: InputDecoration(labelText: tr('Category')),
             items: [
               for (final value in ClinicDocumentCategory.values)
-                DropdownMenuItem(value: value, child: Text(value.label)),
+                DropdownMenuItem(value: value, child: Text(tr(value.label))),
             ],
             onChanged: (value) {
               if (value != null) setState(() => category = value);
@@ -578,8 +606,8 @@ class _DocumentMetadataDialogState extends State<_DocumentMetadataDialog> {
             maxLength: 500,
             minLines: 2,
             maxLines: 4,
-            decoration: const InputDecoration(
-              labelText: 'Notes (optional)',
+            decoration: InputDecoration(
+              labelText: tr('Notes (optional)'),
               alignLabelWithHint: true,
             ),
           ),
@@ -589,13 +617,15 @@ class _DocumentMetadataDialogState extends State<_DocumentMetadataDialog> {
             onChanged: widget.visitDocument || !widget.clinicalRead
                 ? null
                 : (value) => setState(() => clinical = value),
-            title: const Text('Clinical document'),
+            title: Text(tr('Clinical document')),
             subtitle: Text(
-              widget.visitDocument
-                  ? 'Visit documents are always clinical.'
-                  : widget.clinicalRead
-                  ? 'Only staff with clinical access can open it.'
-                  : 'Clinical access has not been granted.',
+              tr(
+                widget.visitDocument
+                    ? 'Visit documents are always clinical.'
+                    : widget.clinicalRead
+                    ? 'Only staff with clinical access can open it.'
+                    : 'Clinical access has not been granted.',
+              ),
             ),
           ),
         ],
@@ -604,14 +634,14 @@ class _DocumentMetadataDialogState extends State<_DocumentMetadataDialog> {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
+        child: Text(tr('Cancel')),
       ),
       FilledButton(
         onPressed: () => Navigator.pop(
           context,
           _DocumentMetadata(category, notes.text.trim(), clinical),
         ),
-        child: const Text('Protect and add'),
+        child: Text(tr('Protect and add')),
       ),
     ],
   );
@@ -628,10 +658,10 @@ class _DocumentMetadata {
 
 String _formatBytes(int value) {
   if (value >= 1024 * 1024) {
-    return '${(value / (1024 * 1024)).toStringAsFixed(1)} MB';
+    return tr('{0} MB', [(value / (1024 * 1024)).toStringAsFixed(1)]);
   }
-  if (value >= 1024) return '${(value / 1024).toStringAsFixed(1)} KB';
-  return '$value B';
+  if (value >= 1024) return tr('{0} KB', [(value / 1024).toStringAsFixed(1)]);
+  return tr('{0} bytes', [value]);
 }
 
 String _stateLabel(String state) => switch (state) {

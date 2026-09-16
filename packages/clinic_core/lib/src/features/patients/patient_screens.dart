@@ -1,3 +1,5 @@
+import 'package:clinic_core/src/presentation/language.dart';
+import '../visits/visit_documents.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -92,8 +94,8 @@ class _PatientSearchPageState extends ConsumerState<PatientSearchPage> {
             TextField(
               controller: search,
               onChanged: changed,
-              decoration: const InputDecoration(
-                labelText: 'Name, mobile or patient ID',
+              decoration: InputDecoration(
+                labelText: tr('Name, mobile or patient ID'),
                 prefixIcon: Icon(Icons.search),
               ),
             ),
@@ -101,7 +103,7 @@ class _PatientSearchPageState extends ConsumerState<PatientSearchPage> {
             Row(
               children: [
                 FilterChip(
-                  label: const Text('Archived'),
+                  label: Text(tr('Archived')),
                   selected: archived,
                   onSelected: (value) {
                     setState(() {
@@ -115,11 +117,11 @@ class _PatientSearchPageState extends ConsumerState<PatientSearchPage> {
                 TextButton.icon(
                   onPressed: () => context.push('/patients/new'),
                   icon: const Icon(Icons.person_add_alt_1),
-                  label: const Text('New patient'),
+                  label: Text(tr('New patient')),
                 ),
               ],
             ),
-            if (remoteError != null) Text(remoteError!),
+            if (remoteError != null) Text(tr(remoteError!)),
           ],
         ),
       ),
@@ -131,12 +133,15 @@ class _PatientSearchPageState extends ConsumerState<PatientSearchPage> {
               ? EmptyPanel(
                   icon: Icons.person_search_outlined,
                   title: 'No patients found',
-                  message:
-                      'No matching ${archived ? 'archived ' : ''}records are cached. Online search may have additional results.',
+                  message: tr(
+                    archived
+                        ? 'No matching archived records are cached. Online search may have additional results.'
+                        : 'No matching records are cached. Online search may have additional results.',
+                  ),
                   action: offset > 0
                       ? TextButton(
                           onPressed: () => page((offset - 50).clamp(0, offset)),
-                          child: const Text('Previous page'),
+                          child: Text(tr('Previous page')),
                         )
                       : null,
                 )
@@ -151,7 +156,12 @@ class _PatientSearchPageState extends ConsumerState<PatientSearchPage> {
                           ),
                           title: Text(p.name),
                           subtitle: Text(
-                            '${p.ageAt(DateTime.now())} years · ${p.gender} · ${p.number}\n${p.mobile}',
+                            tr("{0} years · {1} · {2}\n{3}", [
+                              p.ageAt(DateTime.now()),
+                              tr(p.gender),
+                              p.number,
+                              p.mobile,
+                            ]),
                           ),
                           isThreeLine: true,
                           trailing: const Icon(Icons.chevron_right),
@@ -165,14 +175,14 @@ class _PatientSearchPageState extends ConsumerState<PatientSearchPage> {
                           onPressed: offset == 0
                               ? null
                               : () => page(offset - 50),
-                          child: const Text('Previous'),
+                          child: Text(tr('Previous')),
                         ),
-                        Text('Page ${offset ~/ 50 + 1}'),
+                        Text(tr("Page {0}", [offset ~/ 50 + 1])),
                         TextButton(
                           onPressed: patients.length < 50
                               ? null
                               : () => page(offset + 50),
-                          child: const Text('Next'),
+                          child: Text(tr('Next')),
                         ),
                       ],
                     ),
@@ -252,7 +262,9 @@ class _PatientFormScreenState extends ConsumerState<PatientFormScreen> {
     final repo = ref.watch(repositoryProvider);
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.id == null ? 'Register patient' : 'Edit patient'),
+        title: Text(
+          tr(widget.id == null ? 'Register patient' : 'Edit patient'),
+        ),
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
@@ -260,7 +272,7 @@ class _PatientFormScreenState extends ConsumerState<PatientFormScreen> {
           ? EmptyPanel(
               icon: Icons.error_outline,
               title: 'Patient unavailable',
-              message: error!,
+              message: tr(error!),
             )
           : Form(
               key: form,
@@ -269,35 +281,39 @@ class _PatientFormScreenState extends ConsumerState<PatientFormScreen> {
                 children: [
                   Text(
                     original?.number ??
-                        'Patient ID is assigned automatically after synchronization.',
+                        tr(
+                          'Patient ID is assigned automatically after synchronization.',
+                        ),
                   ),
                   const SizedBox(height: 16),
                   field(
                     name,
-                    'Full name',
+                    tr('Full name'),
                     validator: (v) => (v?.trim().length ?? 0) < 2
                         ? 'Enter the full name'
                         : null,
                   ),
                   DropdownButtonFormField<String>(
                     initialValue: gender,
-                    decoration: const InputDecoration(labelText: 'Gender'),
+                    decoration: InputDecoration(labelText: tr('Gender')),
                     items: ['Female', 'Male', 'Other', 'Not specified']
-                        .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                        .map(
+                          (s) => DropdownMenuItem(value: s, child: Text(tr(s))),
+                        )
                         .toList(),
                     onChanged: (v) => setState(() => gender = v!),
                   ),
                   const SizedBox(height: 16),
                   field(
                     dob,
-                    'Date of birth · YYYY-MM-DD',
+                    tr('Date of birth · YYYY-MM-DD'),
                     validator: (v) => parseBirthDate(v ?? '') == null
                         ? 'Use a valid date: YYYY-MM-DD'
                         : null,
                   ),
                   field(
                     mobile,
-                    'Mobile number',
+                    tr('Mobile number'),
                     keyboard: TextInputType.phone,
                     validator: (v) => normalizePhone(v ?? '').length < 7
                         ? 'Enter a valid mobile number'
@@ -305,15 +321,17 @@ class _PatientFormScreenState extends ConsumerState<PatientFormScreen> {
                   ),
                   field(
                     secondary,
-                    'Secondary mobile',
+                    tr('Secondary mobile'),
                     keyboard: TextInputType.phone,
                   ),
-                  field(address, 'Address', lines: 2),
-                  field(notes, 'General notes', lines: 4),
+                  field(address, tr('Address'), lines: 2),
+                  field(notes, tr('General notes'), lines: 4),
                   if (repo.session.isDoctor)
-                    field(alerts, 'Important medical alerts', lines: 3),
-                  const Text(
-                    'Saving on this device does not mean the server has received the change.',
+                    field(alerts, tr('Important medical alerts'), lines: 3),
+                  Text(
+                    tr(
+                      'Saving on this device does not mean the server has received the change.',
+                    ),
                   ),
                   const SizedBox(height: 20),
                   FilledButton(
@@ -348,7 +366,7 @@ class _PatientFormScreenState extends ConsumerState<PatientFormScreen> {
                               if (saved && context.mounted) context.pop();
                             }
                           },
-                    child: Text(busy ? 'Saving…' : 'Save patient'),
+                    child: Text(tr(busy ? 'Saving…' : 'Save patient')),
                   ),
                 ],
               ),
@@ -369,8 +387,11 @@ class _PatientFormScreenState extends ConsumerState<PatientFormScreen> {
       minLines: lines,
       maxLines: lines > 1 ? lines + 2 : 1,
       keyboardType: keyboard,
-      validator: validator,
-      decoration: InputDecoration(labelText: label),
+      validator: (value) {
+        final error = validator?.call(value);
+        return error == null ? null : tr(error);
+      },
+      decoration: InputDecoration(labelText: tr(label)),
     ),
   );
 }
@@ -385,10 +406,10 @@ class PatientProfileScreen extends ConsumerWidget {
       length: 4,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Patient record'),
+          title: Text(tr('Patient record')),
           actions: [
             IconButton(
-              tooltip: 'Edit patient',
+              tooltip: tr('Edit patient'),
               onPressed: () => context.push('/patients/$id/edit'),
               icon: const Icon(Icons.edit_outlined),
             ),
@@ -412,17 +433,17 @@ class PatientProfileScreen extends ConsumerWidget {
                 child: PatientIdentity(p),
               ),
               if (p.archived)
-                const Padding(
+                Padding(
                   padding: EdgeInsets.all(8),
-                  child: Text('Archived patient · Records are retained'),
+                  child: Text(tr('Archived patient · Records are retained')),
                 ),
-              const TabBar(
+              TabBar(
                 isScrollable: true,
                 tabs: [
-                  Tab(text: 'Overview'),
-                  Tab(text: 'Visits'),
-                  Tab(text: 'Prescriptions'),
-                  Tab(text: 'Attachments'),
+                  Tab(text: tr('Overview')),
+                  Tab(text: tr('Visits')),
+                  Tab(text: tr('Prescriptions')),
+                  Tab(text: tr('Attachments')),
                 ],
               ),
               Expanded(
@@ -442,19 +463,33 @@ class PatientProfileScreen extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Date of birth: ${DateFormat.yMMMd().format(p.birthDate)}',
+                                tr("Date of birth: {0}", [
+                                  DateFormat.yMMMd().format(p.birthDate),
+                                ]),
                               ),
-                              Text('Mobile: ${p.mobile}'),
+                              Text(tr("Mobile: {0}", [p.mobile])),
                               if (p.secondaryMobile.isNotEmpty)
-                                Text('Secondary: ${p.secondaryMobile}'),
+                                Text(tr("Secondary: {0}", [p.secondaryMobile])),
                               Text(
-                                'Address: ${p.address.isEmpty ? 'Not recorded' : p.address}',
+                                tr("Address: {0}", [
+                                  p.address.isEmpty
+                                      ? 'Not recorded'
+                                      : p.address,
+                                ]),
                               ),
                               Text(
-                                'Created: ${DateFormat.yMMMd().format(ClinicTime.local(p.createdAt))}',
+                                tr("Created: {0}", [
+                                  DateFormat.yMMMd().format(
+                                    ClinicTime.local(p.createdAt),
+                                  ),
+                                ]),
                               ),
                               Text(
-                                'Updated: ${DateFormat.yMMMd().format(ClinicTime.local(p.updatedAt))}',
+                                tr("Updated: {0}", [
+                                  DateFormat.yMMMd().format(
+                                    ClinicTime.local(p.updatedAt),
+                                  ),
+                                ]),
                               ),
                             ],
                           ),
@@ -462,7 +497,7 @@ class PatientProfileScreen extends ConsumerWidget {
                         SectionCard(
                           title: 'General notes',
                           child: Text(
-                            p.notes.isEmpty ? 'No general notes.' : p.notes,
+                            tr(p.notes.isEmpty ? 'No general notes.' : p.notes),
                           ),
                         ),
                         if (!p.archived)
@@ -474,7 +509,7 @@ class PatientProfileScreen extends ConsumerWidget {
                               ),
                             ),
                             icon: const Icon(Icons.event_available),
-                            label: const Text('Book appointment'),
+                            label: Text(tr('Book appointment')),
                           ),
                         TextButton(
                           onPressed: () async {
@@ -482,24 +517,28 @@ class PatientProfileScreen extends ConsumerWidget {
                               context: context,
                               builder: (context) => AlertDialog(
                                 title: Text(
-                                  p.archived
-                                      ? 'Restore patient?'
-                                      : 'Archive patient?',
+                                  tr(
+                                    p.archived
+                                        ? 'Restore patient?'
+                                        : 'Archive patient?',
+                                  ),
                                 ),
-                                content: const Text(
-                                  'Medical history is retained. Active queue patients cannot be archived.',
+                                content: Text(
+                                  tr(
+                                    'Medical history is retained. Active queue patients cannot be archived.',
+                                  ),
                                 ),
                                 actions: [
                                   TextButton(
                                     onPressed: () =>
                                         Navigator.pop(context, false),
-                                    child: const Text('Back'),
+                                    child: Text(tr('Back')),
                                   ),
                                   FilledButton(
                                     onPressed: () =>
                                         Navigator.pop(context, true),
                                     child: Text(
-                                      p.archived ? 'Restore' : 'Archive',
+                                      tr(p.archived ? 'Restore' : 'Archive'),
                                     ),
                                   ),
                                 ],
@@ -513,9 +552,11 @@ class PatientProfileScreen extends ConsumerWidget {
                             }
                           },
                           child: Text(
-                            p.archived
-                                ? 'Restore archived patient'
-                                : 'Archive patient',
+                            tr(
+                              p.archived
+                                  ? 'Restore archived patient'
+                                  : 'Archive patient',
+                            ),
                           ),
                         ),
                       ],
@@ -591,12 +632,13 @@ class _ClinicalHistoryState extends ConsumerState<ClinicalHistory> {
   @override
   Widget build(BuildContext context) {
     if (!ref.watch(repositoryProvider).session.clinicalRead) {
-      return const SingleChildScrollView(
+      return SingleChildScrollView(
         child: EmptyPanel(
           icon: Icons.lock_outline,
           title: 'Clinical access restricted',
-          message:
-              'The doctor must grant access to medical history and prescriptions.',
+          message: tr(
+            'The doctor must grant access to medical history and prescriptions.',
+          ),
         ),
       );
     }
@@ -607,22 +649,25 @@ class _ClinicalHistoryState extends ConsumerState<ClinicalHistory> {
         children: [
           Row(
             children: [
-              Expanded(child: Text('Saved visits · Page ${offset ~/ 50 + 1}')),
+              Expanded(
+                child: Text(tr("Saved visits · Page {0}", [offset ~/ 50 + 1])),
+              ),
               IconButton(
-                tooltip: 'Refresh history',
+                tooltip: tr('Refresh history'),
                 onPressed: refreshing ? null : refreshPage,
                 icon: const Icon(Icons.refresh),
               ),
             ],
           ),
-          if (warning != null) Text(warning!),
+          if (warning != null) Text(tr(warning!)),
           if (refreshing) const LinearProgressIndicator(),
           if (visits.isEmpty)
-            const EmptyPanel(
+            EmptyPanel(
               icon: Icons.history,
               title: 'No medical history on this device',
-              message:
-                  'Previous visits will appear after they have been synchronized.',
+              message: tr(
+                'Previous visits will appear after they have been synchronized.',
+              ),
             ),
           for (final v in visits)
             Card(
@@ -631,19 +676,24 @@ class _ClinicalHistoryState extends ConsumerState<ClinicalHistory> {
                   DateFormat.yMMMd().format(ClinicTime.local(v.createdAt)),
                 ),
                 subtitle: Text(
-                  '${v.completed ? 'Completed' : 'Draft'} · revision ${v.currentRevision}\n${v.diagnoses.join(' · ')}',
+                  tr("{0} · revision {1}\n{2}", [
+                    tr(v.completed ? 'Completed' : 'Draft'),
+                    v.currentRevision,
+                    v.diagnoses.join(' · '),
+                  ]),
                 ),
                 childrenPadding: const EdgeInsets.all(16),
                 expandedCrossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (!widget.prescriptionsOnly) ...[
                     Text(v.notes),
-                    if (v.followUp.isNotEmpty) Text('Follow-up: ${v.followUp}'),
+                    if (v.followUp.isNotEmpty)
+                      Text(tr("Follow-up: {0}", [v.followUp])),
                   ],
                   for (final m in v.medications)
                     ListTile(
                       contentPadding: EdgeInsets.zero,
-                      title: Text('${m.name} ${m.strength}'),
+                      title: Text(tr("{0} {1}", [m.name, m.strength])),
                       subtitle: Text(
                         [
                           m.dose,
@@ -655,13 +705,34 @@ class _ClinicalHistoryState extends ConsumerState<ClinicalHistory> {
                       ),
                     ),
                   Text(
-                    'Last changed: ${DateFormat.yMMMd().add_Hm().format(ClinicTime.local(v.updatedAt))} Cairo',
+                    tr("Last changed: {0} Cairo", [
+                      DateFormat.yMMMd().add_Hm().format(
+                        ClinicTime.local(v.updatedAt),
+                      ),
+                    ]),
                   ),
                   if (v.completed)
                     Text(
                       v.amendmentReason.isEmpty
-                          ? 'Historical changes require an amendment. Originals are retained.'
-                          : 'Amendment reason: ${v.amendmentReason}',
+                          ? tr(
+                              'Historical changes require an amendment. Originals are retained.',
+                            )
+                          : tr('Amendment reason: {0}', [v.amendmentReason]),
+                    ),
+                  if (v.completed &&
+                      ref.watch(repositoryProvider).session.clinicalRead)
+                    TextButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute<void>(
+                          builder: (_) => VisitDocumentsScreen(
+                            patientId: widget.patientId,
+                            visitId: v.id,
+                          ),
+                        ),
+                      ),
+                      icon: const Icon(Icons.print_outlined),
+                      label: Text(tr('Print visit documents')),
                     ),
                   if (v.completed &&
                       !widget.prescriptionsOnly &&
@@ -676,7 +747,7 @@ class _ClinicalHistoryState extends ConsumerState<ClinicalHistory> {
                           if (mounted) await refreshPage();
                         },
                         icon: const Icon(Icons.edit_note),
-                        label: const Text('Amend visit'),
+                        label: Text(tr('Amend visit')),
                       ),
                     ),
                 ],
@@ -687,11 +758,11 @@ class _ClinicalHistoryState extends ConsumerState<ClinicalHistory> {
             children: [
               TextButton(
                 onPressed: offset == 0 ? null : () => page(offset - 50),
-                child: const Text('Previous'),
+                child: Text(tr('Previous')),
               ),
               TextButton(
                 onPressed: visits.length < 50 ? null : () => page(offset + 50),
-                child: const Text('Next'),
+                child: Text(tr('Next')),
               ),
             ],
           ),

@@ -1,3 +1,4 @@
+import 'package:clinic_core/src/presentation/language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -143,18 +144,20 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Leave unsaved changes?'),
-        content: const Text(
-          'Save a draft to keep your latest notes. Changes since the last save will otherwise be lost.',
+        title: Text(tr('Leave unsaved changes?')),
+        content: Text(
+          tr(
+            'Save a draft to keep your latest notes. Changes since the last save will otherwise be lost.',
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep editing'),
+            child: Text(tr('Keep editing')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Discard unsaved changes'),
+            child: Text(tr('Discard unsaved changes')),
           ),
         ],
       ),
@@ -176,7 +179,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
     child: Scaffold(
       appBar: AppBar(
         title: Text(
-          widget.amendment ? 'Amend completed visit' : 'Consultation',
+          tr(widget.amendment ? 'Amend completed visit' : 'Consultation'),
         ),
       ),
       body: loading
@@ -185,7 +188,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
           ? EmptyPanel(
               icon: Icons.error_outline,
               title: 'Consultation unavailable',
-              message: error!,
+              message: tr(error!),
             )
           : Column(
               children: [
@@ -205,10 +208,18 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                     children: [
                       Text(
                         widget.amendment
-                            ? 'Revision ${visit!.currentRevision} is preserved. Submitting creates revision ${visit!.currentRevision + 1}.'
-                            : dirty
-                            ? 'Unsaved changes'
-                            : saved ?? 'Draft visit · Not completed',
+                            ? tr(
+                                'Revision {0} is preserved. Submitting creates revision {1}.',
+                                [
+                                  visit!.currentRevision,
+                                  visit!.currentRevision + 1,
+                                ],
+                              )
+                            : tr(
+                                dirty
+                                    ? 'Unsaved changes'
+                                    : saved ?? 'Draft visit · Not completed',
+                              ),
                         style: Theme.of(context).textTheme.labelLarge,
                       ),
                       if (widget.amendment)
@@ -220,10 +231,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                             maxLines: 5,
                             maxLength: 1000,
                             onChanged: (_) => setState(() => dirty = true),
-                            decoration: const InputDecoration(
-                              labelText: 'Required',
-                              hintText:
-                                  'Explain what is being corrected or clarified and why.',
+                            decoration: InputDecoration(
+                              labelText: tr('Required'),
+                              hintText: tr(
+                                'Explain what is being corrected or clarified and why.',
+                              ),
                               alignLabelWithHint: true,
                             ),
                           ),
@@ -232,7 +244,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                         onPressed: () =>
                             context.push('/patients/${patient!.id}'),
                         icon: const Icon(Icons.history),
-                        label: const Text('Review patient history'),
+                        label: Text(tr('Review patient history')),
                       ),
                       SectionCard(
                         title: 'Diagnosis',
@@ -241,15 +253,15 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                           minLines: 2,
                           maxLines: 6,
                           onChanged: (_) => setState(() => dirty = true),
-                          decoration: const InputDecoration(
-                            labelText: 'One diagnosis per line',
+                          decoration: InputDecoration(
+                            labelText: tr('One diagnosis per line'),
                           ),
                         ),
                       ),
                       SectionCard(
                         title: 'Prescription',
                         trailing: IconButton(
-                          tooltip: 'Add medication',
+                          tooltip: tr('Add medication'),
                           icon: const Icon(Icons.add),
                           onPressed: () async {
                             final item = await showDialog<Medication>(
@@ -267,14 +279,19 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                         child: Column(
                           children: [
                             if (medications.isEmpty)
-                              const Text(
-                                'No medication items. Add only what you intend to prescribe.',
+                              Text(
+                                tr(
+                                  'No medication items. Add only what you intend to prescribe.',
+                                ),
                               ),
                             for (var i = 0; i < medications.length; i++)
                               ListTile(
                                 contentPadding: EdgeInsets.zero,
                                 title: Text(
-                                  '${medications[i].name} ${medications[i].strength}',
+                                  tr("{0} {1}", [
+                                    medications[i].name,
+                                    medications[i].strength,
+                                  ]),
                                 ),
                                 subtitle: Text(
                                   [
@@ -298,7 +315,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                                   }
                                 },
                                 trailing: IconButton(
-                                  tooltip: 'Remove medication item',
+                                  tooltip: tr('Remove medication item'),
                                   icon: const Icon(Icons.close),
                                   onPressed: () => setState(() {
                                     medications.removeAt(i);
@@ -316,10 +333,11 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                           minLines: 7,
                           maxLines: 20,
                           onChanged: (_) => setState(() => dirty = true),
-                          decoration: const InputDecoration(
-                            labelText: 'Clinical notes',
-                            hintText:
-                                'Symptoms and examination\nAssessment and treatment plan',
+                          decoration: InputDecoration(
+                            labelText: tr('Clinical notes'),
+                            hintText: tr(
+                              'Symptoms and examination\nAssessment and treatment plan',
+                            ),
                             hintMaxLines: 3,
                             alignLabelWithHint: true,
                           ),
@@ -332,8 +350,8 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                           minLines: 2,
                           maxLines: 5,
                           onChanged: (_) => setState(() => dirty = true),
-                          decoration: const InputDecoration(
-                            labelText: 'Follow-up instructions',
+                          decoration: InputDecoration(
+                            labelText: tr('Follow-up instructions'),
                           ),
                         ),
                       ),
@@ -365,7 +383,7 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                                 ? discard
                                 : save,
                             child: Text(
-                              widget.amendment ? 'Cancel' : 'Save draft',
+                              tr(widget.amendment ? 'Cancel' : 'Save draft'),
                             ),
                           ),
                         ),
@@ -378,11 +396,13 @@ class _ConsultationScreenState extends ConsumerState<ConsultationScreen> {
                                 ? save
                                 : () => save(complete: true),
                             child: Text(
-                              busy
-                                  ? 'Saving…'
-                                  : widget.amendment
-                                  ? 'Submit amendment'
-                                  : 'Complete visit',
+                              tr(
+                                busy
+                                    ? 'Saving…'
+                                    : widget.amendment
+                                    ? 'Submit amendment'
+                                    : 'Complete visit',
+                              ),
                             ),
                           ),
                         ),
@@ -429,7 +449,9 @@ class _MedicationDialogState extends State<MedicationDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text(widget.existing == null ? 'Add medication' : 'Edit medication'),
+    title: Text(
+      tr(widget.existing == null ? 'Add medication' : 'Edit medication'),
+    ),
     content: SingleChildScrollView(
       child: Form(
         key: form,
@@ -443,12 +465,13 @@ class _MedicationDialogState extends State<MedicationDialog> {
                   controller: item.value,
                   validator: item.key == 'name'
                       ? (v) => v == null || v.trim().isEmpty
-                            ? 'Medication name is required'
+                            ? tr('Medication name is required')
                             : null
                       : null,
                   decoration: InputDecoration(
-                    labelText:
-                        item.key[0].toUpperCase() + item.key.substring(1),
+                    labelText: tr(
+                      item.key[0].toUpperCase() + item.key.substring(1),
+                    ),
                   ),
                 ),
               ),
@@ -459,7 +482,7 @@ class _MedicationDialogState extends State<MedicationDialog> {
     actions: [
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Cancel'),
+        child: Text(tr('Cancel')),
       ),
       FilledButton(
         onPressed: () {
@@ -472,7 +495,7 @@ class _MedicationDialogState extends State<MedicationDialog> {
             }),
           );
         },
-        child: const Text('Save item'),
+        child: Text(tr('Save item')),
       ),
     ],
   );

@@ -1,3 +1,4 @@
+import 'package:clinic_core/src/presentation/language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -65,18 +66,23 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Invitation created'),
+          title: Text(tr('Invitation created')),
           content: SingleChildScrollView(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'For ${result['email']} only. The assistant must verify that email and sign in with their own account.',
+                  tr(
+                    "For {0} only. The assistant must verify that email and sign in with their own account.",
+                    [result['email']],
+                  ),
                 ),
                 const SizedBox(height: 12),
-                const Text(
-                  'This code expires in 24 hours and can be used once. Share it privately with this assistant.',
+                Text(
+                  tr(
+                    'This code expires in 24 hours and can be used once. Share it privately with this assistant.',
+                  ),
                 ),
                 const SizedBox(height: 12),
                 SelectableText(result['code'] as String),
@@ -88,11 +94,11 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
               onPressed: () => Clipboard.setData(
                 ClipboardData(text: result['code'] as String),
               ),
-              child: const Text('Copy code'),
+              child: Text(tr('Copy code')),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Done'),
+              child: Text(tr('Done')),
             ),
           ],
         ),
@@ -110,19 +116,22 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(
-          active ? 'Change assistant access?' : 'Revoke assistant access?',
+          tr(active ? 'Change assistant access?' : 'Revoke assistant access?'),
         ),
         content: Text(
-          '${member['email']}\n\nServer permissions change immediately. Disconnected devices cannot receive revocation until they reconnect; offline access controls still require release validation.',
+          tr(
+            "{0}\n\nServer permissions change immediately. Disconnected devices cannot receive revocation until they reconnect; offline access controls still require release validation.",
+            [member['email']],
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(tr('Cancel')),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirm'),
+            child: Text(tr('Confirm')),
           ),
         ],
       ),
@@ -147,21 +156,22 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
     final session = ref.watch(repositoryProvider).session;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Clinic team'),
+        title: Text(tr('Clinic team')),
         actions: [
           IconButton(
-            tooltip: 'Refresh team',
+            tooltip: tr('Refresh team'),
             onPressed: busy ? null : load,
             icon: const Icon(Icons.refresh),
           ),
         ],
       ),
       body: !session.isAdmin || session.isDemo
-          ? const EmptyPanel(
+          ? EmptyPanel(
               icon: Icons.admin_panel_settings_outlined,
               title: 'Online administrator access required',
-              message:
-                  'Sign into a real development clinic as its doctor administrator to invite staff. Preview mode never issues invitations.',
+              message: tr(
+                'Sign into a real development clinic as its doctor administrator to invite staff. Preview mode never issues invitations.',
+              ),
             )
           : ListView(
               padding: const EdgeInsets.all(20),
@@ -171,22 +181,26 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                        'Each staff member uses their own account. A clinic name is not an access code.',
+                      Text(
+                        tr(
+                          'Each staff member uses their own account. A clinic name is not an access code.',
+                        ),
                       ),
                       const SizedBox(height: 16),
                       TextField(
                         controller: email,
                         keyboardType: TextInputType.emailAddress,
-                        decoration: const InputDecoration(
-                          labelText: 'Assistant email',
+                        decoration: InputDecoration(
+                          labelText: tr('Assistant email'),
                         ),
                       ),
                       SwitchListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: const Text('Allow clinical history access'),
-                        subtitle: const Text(
-                          'Read visits and prescriptions. Assistants cannot author clinical records.',
+                        title: Text(tr('Allow clinical history access')),
+                        subtitle: Text(
+                          tr(
+                            'Read visits and prescriptions. Assistants cannot author clinical records.',
+                          ),
                         ),
                         value: clinicalRead,
                         onChanged: busy
@@ -196,7 +210,7 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
                       FilledButton.icon(
                         onPressed: busy ? null : invite,
                         icon: const Icon(Icons.person_add_alt_1),
-                        label: const Text('Create private invitation'),
+                        label: Text(tr('Create private invitation')),
                       ),
                     ],
                   ),
@@ -204,11 +218,11 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
                 if (error != null)
                   Padding(
                     padding: const EdgeInsets.all(12),
-                    child: Text(error!),
+                    child: Text(tr(error!)),
                   ),
                 const SizedBox(height: 12),
                 Text(
-                  'Team members',
+                  tr('Team members'),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 for (final member in members)
@@ -219,16 +233,23 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            member['email'] as String? ?? 'Clinic member',
+                            member['email'] as String? ?? tr('Clinic member'),
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
                           Text(
-                            '${member['role']} · ${member['active'] == true ? 'Active' : 'Access revoked'}',
+                            tr("{0} · {1}", [
+                              tr(member['role'] as String),
+                              tr(
+                                member['active'] == true
+                                    ? 'Active'
+                                    : 'Access revoked',
+                              ),
+                            ]),
                           ),
                           if (member['role'] == 'assistant') ...[
                             SwitchListTile(
                               contentPadding: EdgeInsets.zero,
-                              title: const Text('Clinical read access'),
+                              title: Text(tr('Clinical read access')),
                               value: member['clinical_read'] == true,
                               onChanged: busy
                                   ? null
@@ -247,9 +268,11 @@ class _StaffScreenState extends ConsumerState<StaffScreen> {
                                       clinical: member['clinical_read'] == true,
                                     ),
                               child: Text(
-                                member['active'] == true
-                                    ? 'Revoke access'
-                                    : 'Restore access',
+                                tr(
+                                  member['active'] == true
+                                      ? 'Revoke access'
+                                      : 'Restore access',
+                                ),
                               ),
                             ),
                           ],

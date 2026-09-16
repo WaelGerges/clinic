@@ -1,3 +1,5 @@
+import '../../presentation/language.dart';
+import '../appointments/scheduling_screen.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -75,7 +77,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              doctor ? 'Clinic Doctor' : 'Clinic Assistant',
+              tr(doctor ? 'Clinic Doctor' : 'Clinic Assistant'),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -89,12 +91,12 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
         ),
         actions: [
           IconButton(
-            tooltip: 'Refresh and synchronize',
+            tooltip: tr('Refresh and synchronize'),
             onPressed: () => runAction(
               context,
               () async {
                 await repo.synchronize();
-                await repo.refresh();
+                await repo.refresh(full: true);
               },
               success: repo.gateway == null
                   ? 'Offline workspace: changes remain on this device.'
@@ -112,8 +114,10 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(8),
                 color: Theme.of(context).colorScheme.tertiaryContainer,
-                child: const Text(
-                  'LOCAL PREVIEW · Fictional data · Not shared · Resets when closed',
+                child: Text(
+                  tr(
+                    'LOCAL PREVIEW · Fictional data · Not shared · Resets when closed',
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -124,8 +128,8 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   vertical: 8,
                 ),
                 child: Text(
-                  repo.connectionWarning!,
-                  semanticsLabel: repo.connectionWarning,
+                  tr(repo.connectionWarning!),
+                  semanticsLabel: tr(repo.connectionWarning!),
                 ),
               ),
             LoadView<SyncSummary>(
@@ -134,13 +138,16 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   ? const SizedBox.shrink()
                   : MaterialBanner(
                       content: Text(
-                        '${s.pending} pending · ${s.conflicts} conflicts · ${s.failed} need attention. Saved on this device.',
+                        tr(
+                          "{0} pending · {1} conflicts · {2} need attention. Saved on this device.",
+                          [s.pending, s.conflicts, s.failed],
+                        ),
                       ),
                       actions: [
                         TextButton(
                           onPressed: () =>
                               setState(() => selected = labels.length - 1),
-                          child: const Text('Review'),
+                          child: Text(tr('Review')),
                         ),
                       ],
                     ),
@@ -158,7 +165,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                         labels.length,
                         (i) => NavigationRailDestination(
                           icon: Icon(icons[i]),
-                          label: Text(labels[i]),
+                          label: Text(tr(labels[i])),
                         ),
                       ),
                     ),
@@ -186,39 +193,83 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                 labels.length,
                 (i) => NavigationDestination(
                   icon: Icon(icons[i]),
-                  label: labels[i],
+                  label: tr(labels[i]),
                 ),
               ),
             ),
     );
   }
 
+  Future<void> discardRejected(
+    BuildContext context,
+    ClinicRepository repo,
+    String operationId,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(tr('Discard this rejected request?')),
+        content: Text(
+          tr(
+            'The server rejected this request and did not apply it. Discarding removes it from the queue so the remaining changes can synchronize, and refreshes the saved record from the server. Any edit it contained will need to be made again.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(tr('Cancel')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(tr('Discard')),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    await runAction(
+      context,
+      () => repo.discardRejectedOperation(operationId),
+      success: 'The rejected request was discarded. Synchronization resumed.',
+    );
+  }
+
   Widget settings(ClinicRepository repo) => ListView(
     padding: const EdgeInsets.all(20),
     children: [
+      ListTile(
+        leading: const Icon(Icons.edit_calendar),
+        title: Text(tr('Working hours and waitlist')),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute<void>(builder: (_) => const SchedulingScreen()),
+        ),
+      ),
       if (repo.session.isDoctor && repo.session.isAdmin)
         ListTile(
           leading: const Icon(Icons.people_outline),
-          title: const Text('Clinic team'),
-          subtitle: const Text('Invite assistants and manage access'),
+          title: Text(tr('Clinic team')),
+          subtitle: Text(tr('Invite assistants and manage access')),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => context.push('/staff'),
         ),
       if (repo.session.isDoctor && repo.session.isAdmin)
         ListTile(
           leading: const Icon(Icons.policy_outlined),
-          title: const Text('Audit and access'),
-          subtitle: const Text('Review protected clinic activity'),
+          title: Text(tr('Audit and access')),
+          subtitle: Text(tr('Review protected clinic activity')),
           trailing: const Icon(Icons.chevron_right),
           onTap: () => context.push('/audit'),
         ),
+      const LanguagePicker(),
+      const SizedBox(height: 16),
       SectionCard(
         title: 'Appearance',
         child: DropdownButtonFormField<ThemeMode>(
           initialValue: widget.mode,
-          decoration: const InputDecoration(labelText: 'Theme'),
+          decoration: InputDecoration(labelText: tr('Theme')),
           items: ThemeMode.values
-              .map((m) => DropdownMenuItem(value: m, child: Text(m.name)))
+              .map((m) => DropdownMenuItem(value: m, child: Text(tr(m.name))))
               .toList(),
           onChanged: (m) {
             if (m != null) widget.onTheme(m);
@@ -231,19 +282,21 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              repo.gateway == null
-                  ? 'Offline preview. No changes are sent to a server.'
-                  : 'Local changes are queued and retried. Hosted integration is not yet validated.',
+              tr(
+                repo.gateway == null
+                    ? 'Offline preview. No changes are sent to a server.'
+                    : 'Local changes are queued and retried. Hosted integration is not yet validated.',
+              ),
             ),
             const SizedBox(height: 12),
             FilledButton.tonal(
               onPressed: () => runAction(context, repo.synchronize),
-              child: const Text('Retry pending changes'),
+              child: Text(tr('Retry pending changes')),
             ),
             TextButton.icon(
               onPressed: () => context.push('/sync/history'),
               icon: const Icon(Icons.history),
-              label: const Text('Recovery history'),
+              label: Text(tr('Recovery history')),
             ),
             LoadView<List<Map<String, dynamic>>>(
               load: (r) => r.pendingOperations(),
@@ -253,14 +306,33 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.cloud_upload_outlined),
-                      title: Text('${row['entity_type']} · ${row['action']}'),
-                      subtitle: Text(
-                        '${row['state']}\n${row['error'] ?? 'Waiting for server confirmation'}',
+                      title: Text(
+                        tr("{0} · {1}", [
+                          tr(row['entity_type'] as String),
+                          tr(row['action'] as String),
+                        ]),
                       ),
-                      trailing:
-                          row['state'] == 'conflict' &&
-                              row['entity_type'] == 'patient' &&
-                              row['action'] == 'save'
+                      subtitle: Text(
+                        tr("{0}\n{1}", [
+                          tr(row['state'] as String),
+                          tr(
+                            (row['error'] as String?) ??
+                                'Waiting for server confirmation',
+                          ),
+                        ]),
+                      ),
+                      trailing: row['state'] == 'failed'
+                          ? TextButton(
+                              onPressed: () => discardRejected(
+                                context,
+                                repo,
+                                row['operation_id'] as String,
+                              ),
+                              child: Text(tr('Discard')),
+                            )
+                          : row['state'] == 'conflict' &&
+                                row['entity_type'] == 'patient' &&
+                                row['action'] == 'save'
                           ? const Icon(Icons.chevron_right)
                           : null,
                       onTap:
@@ -273,8 +345,16 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                           : null,
                     ),
                   if (rows.any((r) => r['state'] == 'conflict'))
-                    const Text(
-                      'Tap a patient conflict to compare versions. Appointment and clinical conflict recovery still require further implementation; those requests remain retained and blocked.',
+                    Text(
+                      tr(
+                        'Tap a patient conflict to compare versions. Appointment and clinical conflict recovery still require further implementation; those requests remain retained and blocked.',
+                      ),
+                    ),
+                  if (rows.any((r) => r['state'] == 'failed'))
+                    Text(
+                      tr(
+                        'A rejected request blocks everything queued after it, including document uploads and shared queue actions. The server did not apply it. Discard it to resume synchronization; the saved record is then refreshed from the server.',
+                      ),
                     ),
                 ],
               ),
@@ -282,17 +362,19 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
           ],
         ),
       ),
-      const SectionCard(
+      SectionCard(
         title: 'Foundation build',
         child: Text(
-          'Document staging/preview, completed-visit amendments, a privacy-safe administrator audit review, and an eight-hour verified offline access lease are implemented. Device controls, full access logging, and full delta synchronization are not finished. Use fictional data only.',
+          tr(
+            'Document staging/preview, completed-visit amendments, a privacy-safe administrator audit review, and an eight-hour verified offline access lease are implemented. Device controls, full access logging, and full delta synchronization are not finished. Use fictional data only.',
+          ),
         ),
       ),
       if (widget.onLogout != null)
         OutlinedButton.icon(
           onPressed: () => runAction(context, widget.onLogout!),
           icon: const Icon(Icons.logout),
-          label: const Text('Sign out and lock local records'),
+          label: Text(tr('Sign out and lock local records')),
         ),
     ],
   );
@@ -310,7 +392,7 @@ class DashboardPage extends StatelessWidget {
     padding: const EdgeInsets.all(20),
     children: [
       Text(
-        'A clear view of your day',
+        tr('A clear view of your day'),
         style: Theme.of(context).textTheme.headlineSmall,
       ),
       Text(DateFormat('EEEE, d MMMM').format(ClinicTime.now())),
@@ -318,7 +400,7 @@ class DashboardPage extends StatelessWidget {
       FilledButton.tonalIcon(
         onPressed: onPatients,
         icon: const Icon(Icons.search),
-        label: const Text('Search patient by name, phone or ID'),
+        label: Text(tr('Search patient by name, phone or ID')),
       ),
       const SizedBox(height: 16),
       LoadView<List<Appointment>>(
@@ -331,7 +413,7 @@ class DashboardPage extends StatelessWidget {
                   child: SectionCard(
                     title: 'Today',
                     child: Text(
-                      '${rows.length}',
+                      tr("{0}", [rows.length]),
                       style: Theme.of(context).textTheme.headlineMedium,
                     ),
                   ),
@@ -340,7 +422,11 @@ class DashboardPage extends StatelessWidget {
                   child: SectionCard(
                     title: 'Waiting',
                     child: Text(
-                      '${rows.where((a) => a.status == AppointmentStatus.waiting).length}',
+                      tr("{0}", [
+                        rows
+                            .where((a) => a.status == AppointmentStatus.waiting)
+                            .length,
+                      ]),
                       style: Theme.of(context).textTheme.headlineMedium,
                     ),
                   ),
@@ -351,15 +437,17 @@ class DashboardPage extends StatelessWidget {
               title: 'Today’s appointments',
               trailing: TextButton(
                 onPressed: onQueue,
-                child: const Text('Queue'),
+                child: Text(tr('Queue')),
               ),
               child: Column(
                 children: [
                   if (rows.isEmpty)
-                    const EmptyPanel(
+                    EmptyPanel(
                       icon: Icons.calendar_today_outlined,
                       title: 'No appointments today',
-                      message: 'Create an appointment or register a walk-in.',
+                      message: tr(
+                        'Create an appointment or register a walk-in.',
+                      ),
                     ),
                   for (final a in rows.take(6)) AppointmentTile(a),
                 ],
@@ -372,7 +460,7 @@ class DashboardPage extends StatelessWidget {
       FilledButton.icon(
         onPressed: () => context.push('/patients/new'),
         icon: const Icon(Icons.person_add_alt_1),
-        label: const Text('Register patient'),
+        label: Text(tr('Register patient')),
       ),
     ],
   );
@@ -410,7 +498,10 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
   Widget build(BuildContext context) => ListView(
     padding: const EdgeInsets.all(20),
     children: [
-      Text('Appointments', style: Theme.of(context).textTheme.headlineSmall),
+      Text(
+        tr('Appointments'),
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
       const SizedBox(height: 12),
       Wrap(
         spacing: 8,
@@ -418,7 +509,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
         children: [
           OutlinedButton(
             onPressed: () => selectDay(ClinicTime.now()),
-            child: const Text('Today'),
+            child: Text(tr('Today')),
           ),
           OutlinedButton(
             onPressed: () => selectDay(
@@ -428,7 +519,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                 ClinicTime.now().day + 1,
               ),
             ),
-            child: const Text('Tomorrow'),
+            child: Text(tr('Tomorrow')),
           ),
           OutlinedButton.icon(
             onPressed: () async {
@@ -441,23 +532,23 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
               if (chosen != null && mounted) selectDay(chosen);
             },
             icon: const Icon(Icons.calendar_month_outlined),
-            label: const Text('Calendar'),
+            label: Text(tr('Calendar')),
           ),
         ],
       ),
       const SizedBox(height: 16),
       Text(DateFormat.yMMMMEEEEd().format(day)),
-      const Text('Showing appointments currently cached on this device.'),
+      Text(tr('Showing appointments currently cached on this device.')),
       const SizedBox(height: 12),
       LoadView<List<Appointment>>(
         load: (r) => r.appointments(day: day),
         builder: (rows) => Column(
           children: [
             if (rows.isEmpty)
-              const EmptyPanel(
+              EmptyPanel(
                 icon: Icons.event_available,
                 title: 'No appointments for this date',
-                message: 'Create a new appointment below.',
+                message: tr('Create a new appointment below.'),
               ),
             for (final a in rows) AppointmentTile(a),
           ],
@@ -471,7 +562,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
           ),
         ),
         icon: const Icon(Icons.add),
-        label: const Text('New appointment'),
+        label: Text(tr('New appointment')),
       ),
     ],
   );
@@ -483,9 +574,14 @@ class QueuePage extends StatelessWidget {
   Widget build(BuildContext context) => ListView(
     padding: const EdgeInsets.all(20),
     children: [
-      Text('Today’s queue', style: Theme.of(context).textTheme.headlineSmall),
-      const Text(
-        'One active patient per doctor. Handoffs require server confirmation.',
+      Text(
+        tr('Today’s queue'),
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
+      Text(
+        tr(
+          'One active patient per doctor. Handoffs require server confirmation.',
+        ),
       ),
       const SizedBox(height: 16),
       LoadView<
@@ -518,11 +614,13 @@ class QueuePage extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      !data.delivery.serviceAvailable
-                          ? 'Live device status is unavailable in offline preview.'
-                          : data.delivery.doctorOnline
-                          ? 'Doctor app is online for a server-confirmed handoff.'
-                          : 'Doctor app presence is absent or expired. Do not send a patient.',
+                      tr(
+                        !data.delivery.serviceAvailable
+                            ? 'Live device status is unavailable in offline preview.'
+                            : data.delivery.doctorOnline
+                            ? 'Doctor app is online for a server-confirmed handoff.'
+                            : 'Doctor app presence is absent or expired. Do not send a patient.',
+                      ),
                     ),
                   ),
                 ],
@@ -531,15 +629,23 @@ class QueuePage extends StatelessWidget {
             SectionCard(
               title: 'With doctor',
               child: data.active == null
-                  ? const Text('No patient currently assigned.')
+                  ? Text(tr('No patient currently assigned.'))
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         AppointmentTile(data.active!, actions: false),
                         Text(
                           data.delivery.acknowledged
-                              ? 'Doctor receipt confirmed at ${DateFormat.Hm().format(ClinicTime.local(data.delivery.acknowledgedAt!))} Cairo.'
-                              : 'Awaiting explicit Doctor-device receipt. The assignment is reserved, but receipt must not be assumed.',
+                              ? tr('Doctor receipt confirmed at {0} Cairo.', [
+                                  DateFormat.Hm().format(
+                                    ClinicTime.local(
+                                      data.delivery.acknowledgedAt!,
+                                    ),
+                                  ),
+                                ])
+                              : tr(
+                                  'Awaiting explicit Doctor-device receipt. The assignment is reserved, but receipt must not be assumed.',
+                                ),
                         ),
                       ],
                     ),
@@ -551,7 +657,7 @@ class QueuePage extends StatelessWidget {
                   if (!data.today.any(
                     (a) => a.status == AppointmentStatus.waiting,
                   ))
-                    const Text('Nobody is waiting.'),
+                    Text(tr('Nobody is waiting.')),
                   for (final a in data.today.where(
                     (a) => a.status == AppointmentStatus.waiting,
                   ))
@@ -572,7 +678,7 @@ class QueuePage extends StatelessWidget {
                   if (!data.today.any(
                     (a) => a.status == AppointmentStatus.completed,
                   ))
-                    const Text('Completed visits will appear here.'),
+                    Text(tr('Completed visits will appear here.')),
                   for (final a in data.today.where(
                     (a) => a.status == AppointmentStatus.completed,
                   ))
@@ -593,7 +699,10 @@ class CurrentPatientPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) => ListView(
     padding: const EdgeInsets.all(20),
     children: [
-      Text('Current patient', style: Theme.of(context).textTheme.headlineSmall),
+      Text(
+        tr('Current patient'),
+        style: Theme.of(context).textTheme.headlineSmall,
+      ),
       const SizedBox(height: 16),
       LoadView<
         ({
@@ -612,11 +721,12 @@ class CurrentPatientPage extends ConsumerWidget {
         },
         builder: (data) {
           if (data.patient == null) {
-            return const EmptyPanel(
+            return EmptyPanel(
               icon: Icons.meeting_room_outlined,
               title: 'No patient currently assigned.',
-              message:
-                  'The current patient appears here after the assistant’s handoff is confirmed.',
+              message: tr(
+                'The current patient appears here after the assistant’s handoff is confirmed.',
+              ),
             );
           }
           final p = data.patient!, a = data.appointment!;
@@ -632,7 +742,10 @@ class CurrentPatientPage extends ConsumerWidget {
                     const SizedBox(height: 16),
                     StatusChip(a.status),
                     Text(
-                      '${DateFormat.Hm().format(ClinicTime.local(a.startsAt))} · ${a.type} · Cairo',
+                      tr("{0} · {1} · Cairo", [
+                        DateFormat.Hm().format(ClinicTime.local(a.startsAt)),
+                        a.type,
+                      ]),
                     ),
                     if (p.alerts.isNotEmpty)
                       Padding(
@@ -650,17 +763,23 @@ class CurrentPatientPage extends ConsumerWidget {
               const SizedBox(height: 16),
               if (data.delivery.acknowledged) ...[
                 Text(
-                  'Receipt confirmed at ${DateFormat.Hm().format(ClinicTime.local(data.delivery.acknowledgedAt!))} Cairo.',
+                  tr("Receipt confirmed at {0} Cairo.", [
+                    DateFormat.Hm().format(
+                      ClinicTime.local(data.delivery.acknowledgedAt!),
+                    ),
+                  ]),
                 ),
                 const SizedBox(height: 8),
                 FilledButton.icon(
                   onPressed: () => context.push('/consultation/${a.id}'),
                   icon: const Icon(Icons.edit_note),
-                  label: const Text('Open consultation'),
+                  label: Text(tr('Open consultation')),
                 ),
               ] else ...[
-                const Text(
-                  'The server assigned this patient, but no Doctor device has acknowledged receipt. Confirm receipt before opening the consultation.',
+                Text(
+                  tr(
+                    'The server assigned this patient, but no Doctor device has acknowledged receipt. Confirm receipt before opening the consultation.',
+                  ),
                 ),
                 const SizedBox(height: 8),
                 FilledButton.icon(
@@ -671,22 +790,20 @@ class CurrentPatientPage extends ConsumerWidget {
                     success: 'Patient receipt confirmed.',
                   ),
                   icon: const Icon(Icons.mark_email_read_outlined),
-                  label: const Text('Acknowledge patient received'),
+                  label: Text(tr('Acknowledge patient received')),
                 ),
               ],
               TextButton.icon(
                 onPressed: () => context.push('/patients/${p.id}'),
                 icon: const Icon(Icons.history),
-                label: const Text('Medical history and patient record'),
+                label: Text(tr('Medical history and patient record')),
               ),
               SectionCard(
                 title: 'Previous visits',
                 child: LoadView<List<Visit>>(
                   load: (r) => r.visits(p.id),
                   builder: (visits) => visits.isEmpty
-                      ? const Text(
-                          'No previous medical history on this device.',
-                        )
+                      ? Text(tr('No previous medical history on this device.'))
                       : Column(
                           children: [
                             for (final v in visits.take(3))
@@ -745,9 +862,13 @@ class _AppointmentTileState extends ConsumerState<AppointmentTile> {
           children: [
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text(data.patient?.name ?? 'Patient unavailable'),
+              title: Text(data.patient?.name ?? tr('Patient unavailable')),
               subtitle: Text(
-                '${DateFormat.Hm().format(ClinicTime.local(a.startsAt))} · ${data.patient?.number ?? ''}',
+                tr("{0} · {1} min · {2}", [
+                  DateFormat.Hm().format(ClinicTime.local(a.startsAt)),
+                  a.durationMinutes,
+                  data.patient?.number ?? '',
+                ]),
               ),
               trailing: largeText ? null : StatusChip(a.status),
               onTap: data.patient == null
@@ -769,7 +890,7 @@ class _AppointmentTileState extends ConsumerState<AppointmentTile> {
                               () =>
                                   r.changeStatus(a, AppointmentStatus.arrived),
                             ),
-                      child: const Text('Mark arrived'),
+                      child: Text(tr('Mark arrived')),
                     ),
                   if (a.status == AppointmentStatus.scheduled)
                     TextButton(
@@ -781,7 +902,7 @@ class _AppointmentTileState extends ConsumerState<AppointmentTile> {
                                 AppointmentStatus.confirmed,
                               ),
                             ),
-                      child: const Text('Confirm'),
+                      child: Text(tr('Confirm')),
                     ),
                   if (a.status == AppointmentStatus.arrived)
                     FilledButton.tonal(
@@ -791,7 +912,7 @@ class _AppointmentTileState extends ConsumerState<AppointmentTile> {
                               () =>
                                   r.changeStatus(a, AppointmentStatus.waiting),
                             ),
-                      child: const Text('Add to queue'),
+                      child: Text(tr('Add to queue')),
                     ),
                   if (a.status == AppointmentStatus.waiting)
                     FilledButton.icon(
@@ -802,20 +923,23 @@ class _AppointmentTileState extends ConsumerState<AppointmentTile> {
                               final confirm = await showDialog<bool>(
                                 context: context,
                                 builder: (context) => AlertDialog(
-                                  title: const Text('Send to doctor?'),
+                                  title: Text(tr('Send to doctor?')),
                                   content: Text(
-                                    'Assign ${data.patient?.name ?? 'this patient'}? The server will reserve the assignment, but the Doctor device must acknowledge receipt separately.',
+                                    tr(
+                                      "Assign {0}? The server will reserve the assignment, but the Doctor device must acknowledge receipt separately.",
+                                      [data.patient?.name ?? 'this patient'],
+                                    ),
                                   ),
                                   actions: [
                                     TextButton(
                                       onPressed: () =>
                                           Navigator.pop(context, false),
-                                      child: const Text('Back'),
+                                      child: Text(tr('Back')),
                                     ),
                                     FilledButton(
                                       onPressed: () =>
                                           Navigator.pop(context, true),
-                                      child: const Text('Send to Doctor'),
+                                      child: Text(tr('Send to Doctor')),
                                     ),
                                   ],
                                 ),
@@ -826,54 +950,61 @@ class _AppointmentTileState extends ConsumerState<AppointmentTile> {
                             },
                       icon: const Icon(Icons.arrow_forward),
                       label: Text(
-                        widget.doctorBusy
-                            ? 'Doctor is busy'
-                            : !widget.doctorAvailable
-                            ? 'Doctor device offline'
-                            : 'Send to Doctor',
+                        tr(
+                          widget.doctorBusy
+                              ? 'Doctor is busy'
+                              : !widget.doctorAvailable
+                              ? 'Doctor device offline'
+                              : 'Send to Doctor',
+                        ),
                       ),
                     ),
-                  if (a.status != AppointmentStatus.withDoctor)
-                    PopupMenuButton<String>(
-                      enabled: !busy,
-                      tooltip: 'Appointment actions',
-                      onSelected: (action) {
-                        if (action == 'reschedule') {
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) =>
-                                  AppointmentFormScreen(existing: a),
-                            ),
-                          );
-                        } else {
-                          act(
-                            () => r.changeStatus(
-                              a,
-                              action == 'cancel'
-                                  ? AppointmentStatus.cancelled
-                                  : AppointmentStatus.noShow,
-                            ),
-                          );
-                        }
-                      },
-                      itemBuilder: (_) => [
-                        if (a.status == AppointmentStatus.scheduled ||
-                            a.status == AppointmentStatus.confirmed) ...[
-                          const PopupMenuItem(
-                            value: 'reschedule',
-                            child: Text('Reschedule'),
+                  // Also shown while the patient is with the doctor, so a
+                  // mis-sent patient or a walkout can be released instead of
+                  // holding the doctor's only active slot.
+                  PopupMenuButton<String>(
+                    enabled: !busy,
+                    tooltip: tr('Appointment actions'),
+                    onSelected: (action) {
+                      if (action == 'reschedule') {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => AppointmentFormScreen(existing: a),
                           ),
-                          const PopupMenuItem(
-                            value: 'noShow',
-                            child: Text('No Show'),
-                          ),
-                        ],
-                        const PopupMenuItem(
-                          value: 'cancel',
-                          child: Text('Cancel appointment'),
+                        );
+                      } else {
+                        act(
+                          () => r.changeStatus(a, switch (action) {
+                            'cancel' => AppointmentStatus.cancelled,
+                            'return' => AppointmentStatus.waiting,
+                            _ => AppointmentStatus.noShow,
+                          }),
+                        );
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      if (a.status == AppointmentStatus.scheduled ||
+                          a.status == AppointmentStatus.confirmed) ...[
+                        PopupMenuItem(
+                          value: 'reschedule',
+                          child: Text(tr('Reschedule')),
+                        ),
+                        PopupMenuItem(
+                          value: 'noShow',
+                          child: Text(tr('No Show')),
                         ),
                       ],
-                    ),
+                      if (a.status == AppointmentStatus.withDoctor)
+                        PopupMenuItem(
+                          value: 'return',
+                          child: Text(tr('Return to queue')),
+                        ),
+                      PopupMenuItem(
+                        value: 'cancel',
+                        child: Text(tr('Cancel appointment')),
+                      ),
+                    ],
+                  ),
                 ],
               ),
           ],

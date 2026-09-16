@@ -1,3 +1,4 @@
+import 'package:clinic_core/src/presentation/language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/models.dart';
@@ -73,7 +74,7 @@ class LoadView<T> extends ConsumerWidget {
           return EmptyPanel(
             icon: Icons.error_outline,
             title: 'Unable to load',
-            message: safeError(snapshot.error!),
+            message: tr(safeError(snapshot.error!)),
           );
         }
         if (!snapshot.hasData) {
@@ -103,14 +104,14 @@ Future<bool> runAction(
     if (context.mounted && success != null) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text(success)));
+      ).showSnackBar(SnackBar(content: Text(tr(success))));
     }
     return true;
   } catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(safeError(error)),
+          content: Text(tr(safeError(error))),
           duration: const Duration(seconds: 6),
         ),
       );
@@ -139,12 +140,12 @@ class EmptyPanel extends StatelessWidget {
         Icon(icon, size: 44, color: Theme.of(context).colorScheme.primary),
         const SizedBox(height: 16),
         Text(
-          title,
+          tr(title),
           style: Theme.of(context).textTheme.titleLarge,
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 8),
-        Text(message, textAlign: TextAlign.center),
+        Text(tr(message), textAlign: TextAlign.center),
         if (action != null) ...[const SizedBox(height: 20), action!],
       ],
     ),
@@ -156,7 +157,7 @@ class StatusChip extends StatelessWidget {
   final AppointmentStatus status;
   @override
   Widget build(BuildContext context) => Semantics(
-    label: 'Appointment status: ${status.label}',
+    label: tr('Appointment status: {0}', [tr(status.label)]),
     child: Chip(
       avatar: Icon(
         status == AppointmentStatus.completed
@@ -166,7 +167,7 @@ class StatusChip extends StatelessWidget {
             : Icons.schedule,
         size: 16,
       ),
-      label: Text(status.label),
+      label: Text(tr(status.label)),
       backgroundColor: status == AppointmentStatus.withDoctor
           ? Theme.of(context).colorScheme.primaryContainer
           : null,
@@ -196,7 +197,7 @@ class SectionCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  title,
+                  tr(title),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -238,7 +239,11 @@ class PatientIdentity extends StatelessWidget {
           children: [
             Text(patient.name, style: Theme.of(context).textTheme.titleLarge),
             Text(
-              '${patient.ageAt(DateTime.now())} years · ${patient.gender} · ${patient.number}',
+              tr("{0} years · {1} · {2}", [
+                patient.ageAt(DateTime.now()),
+                tr(patient.gender),
+                patient.number,
+              ]),
             ),
             Text(patient.mobile),
           ],
@@ -253,7 +258,7 @@ class MedicalAlert extends StatelessWidget {
   final String message;
   @override
   Widget build(BuildContext context) => Semantics(
-    label: 'Important medical alert',
+    label: tr('Important medical alert'),
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -265,7 +270,7 @@ class MedicalAlert extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Text(
-            message,
+            tr(message),
             style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
         ),

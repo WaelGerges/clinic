@@ -1,3 +1,4 @@
+import '../../presentation/language.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
@@ -8,6 +9,21 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../data/access_lease.dart';
 import '../../domain/models.dart';
 import '../../presentation/common.dart';
+
+/// Why a membership with [role] cannot be opened by [kind], or null when this
+/// is the right app for it.
+///
+/// Both apps list every membership the signed-in account has, because hiding
+/// the others would look like the clinic had disappeared. A doctor account
+/// opened in the Assistant App therefore reaches this, and the row says which
+/// app to use instead of the tap failing with nothing visible on screen.
+String? clinicRoleMismatch(AppKind kind, String role) => switch (kind) {
+  AppKind.doctor when role != ClinicRole.doctor.name =>
+    'Use the Assistant App for this clinic role.',
+  AppKind.assistant when role != ClinicRole.assistant.name =>
+    'Use the Doctor App for this clinic role.',
+  _ => null,
+};
 
 String authRedirect(AppKind kind) => switch (kind) {
   AppKind.assistant => 'dev.homeversion.clinic.assistant://auth-callback/',
@@ -125,6 +141,25 @@ class _AuthScreenState extends State<AuthScreen> {
     setState(() {});
   }
 
+  /// Shows a failure both inline and as a snack bar.
+  ///
+  /// The inline notice alone sat below the clinic list, the invitation field
+  /// and four buttons, so on a phone the reason a clinic refused to open was
+  /// off-screen and the tap looked like it had done nothing at all.
+  void report(String text) {
+    if (!mounted) return;
+    final translated = tr(text);
+    setState(() => message = translated);
+    ScaffoldMessenger.maybeOf(context)
+      ?..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(translated),
+          duration: const Duration(seconds: 8),
+        ),
+      );
+  }
+
   Future<void> act(
     Future<void> Function() operation, {
     String authFailureMessage =
@@ -137,19 +172,15 @@ class _AuthScreenState extends State<AuthScreen> {
     try {
       await operation();
     } on AuthException {
-      if (mounted) {
-        setState(() => message = authFailureMessage);
-      }
+      report(authFailureMessage);
     } on PostgrestException catch (e) {
-      if (mounted) {
-        setState(
-          () => message = e.code == 'PGRST205' || e.code == 'PGRST202'
-              ? 'The clinic access service is unavailable or incompatible. Contact the administrator.'
-              : 'Clinic access could not be verified. Contact the administrator.',
-        );
-      }
+      report(
+        e.code == 'PGRST205' || e.code == 'PGRST202'
+            ? 'The clinic access service is unavailable or incompatible. Contact the administrator.'
+            : 'Clinic access could not be verified. Contact the administrator.',
+      );
     } catch (e) {
-      if (mounted) setState(() => message = safeError(e));
+      report(safeError(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }
@@ -205,34 +236,31 @@ class _AuthScreenState extends State<AuthScreen> {
         setState(() {
           memberships = [];
           offlineLease = saved;
-          message =
-              'Connection unavailable. Saved access can open this clinic until ${DateFormat('d MMM, HH:mm').format(saved.expiresAt.toLocal())}. Shared queue actions, amendments, and remote documents still require a connection.';
+          message = tr(
+            'Connection unavailable. Saved access can open this clinic until {0}. Shared queue actions, amendments, and remote documents still require a connection.',
+            [DateFormat('d MMM, HH:mm').format(saved.expiresAt.toLocal())],
+          );
         });
       }
     }
   }
 
   Future<void> selectClinic(Map<String, dynamic> row) async {
+    final mismatch = clinicRoleMismatch(widget.kind, row['role'] as String);
+    if (mismatch != null) throw ClinicFailure('forbidden', mismatch);
     final user = widget.client.auth.currentUser!,
         role = ClinicRole.values.byName(row['role'] as String);
-    if (widget.kind == AppKind.doctor && role != ClinicRole.doctor) {
-      throw const ClinicFailure(
-        'forbidden',
-        'Use the Assistant App for this clinic role.',
-      );
-    }
-    if (widget.kind == AppKind.assistant && role != ClinicRole.assistant) {
-      throw const ClinicFailure(
-        'forbidden',
-        'Use the Doctor App for this clinic role.',
-      );
-    }
+    // Ordered so an assistant binds to the same doctor on every device and
+    // every sign-in. An unordered read picked an arbitrary row, which changed
+    // which doctor's queue and presence the assistant saw.
     final doctors = await widget.client
         .from('clinic_memberships')
-        .select('user_id')
+        .select('user_id,created_at')
         .eq('clinic_id', row['clinic_id'])
         .eq('role', 'doctor')
-        .eq('active', true);
+        .eq('active', true)
+        .order('created_at')
+        .order('user_id');
     if (doctors.isEmpty) {
       throw const ClinicFailure(
         'no_doctor',
@@ -277,12 +305,34 @@ class _AuthScreenState extends State<AuthScreen> {
     await widget.accessLease.clear();
     if (mounted) {
       setState(
-        () => message = revokedEverywhere
-            ? 'Password updated. Sign in with your new password.'
-            : 'Password updated and this device was signed out. Other device sessions could not be revoked; contact the clinic administrator.',
+        () => message = tr(
+          revokedEverywhere
+              ? 'Password updated. Sign in with your new password.'
+              : 'Password updated and this device was signed out. Other device sessions could not be revoked; contact the clinic administrator.',
+        ),
       );
     }
   });
+
+  Widget clinicTile(Map<String, dynamic> row) {
+    final role = row['role'] as String;
+    final mismatch = clinicRoleMismatch(widget.kind, role);
+    return Card(
+      child: ListTile(
+        enabled: mismatch == null,
+        title: Text((row['clinics'] as Map)['name'] as String),
+        subtitle: Text(tr(mismatch ?? role)),
+        trailing: Icon(
+          mismatch == null
+              ? Icons.chevron_right
+              : Icons.phonelink_off_outlined,
+        ),
+        onTap: busy || mismatch != null
+            ? null
+            : () => act(() => selectClinic(row)),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) => Scaffold(
@@ -295,6 +345,8 @@ class _AuthScreenState extends State<AuthScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                const LanguagePicker(),
+                const SizedBox(height: 20),
                 Icon(
                   Icons.health_and_safety_outlined,
                   size: 56,
@@ -302,17 +354,30 @@ class _AuthScreenState extends State<AuthScreen> {
                 ),
                 const SizedBox(height: 20),
                 Text(
-                  widget.kind == AppKind.doctor
-                      ? 'Clinic Doctor'
-                      : 'Clinic Assistant',
+                  tr(
+                    widget.kind == AppKind.doctor
+                        ? 'Clinic Doctor'
+                        : 'Clinic Assistant',
+                  ),
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.headlineMedium,
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Your clinic. One connected patient record.',
+                Text(
+                  tr('Your clinic. One connected patient record.'),
                   textAlign: TextAlign.center,
                 ),
+                if (message != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 20),
+                    child: Card(
+                      color: Theme.of(context).colorScheme.secondaryContainer,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(message!, textAlign: TextAlign.center),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 28),
                 if (widget.passwordRecovery.active)
                   PasswordRecoveryPanel(
@@ -324,14 +389,14 @@ class _AuthScreenState extends State<AuthScreen> {
                     controller: email,
                     keyboardType: TextInputType.emailAddress,
                     autofillHints: const [AutofillHints.username],
-                    decoration: const InputDecoration(labelText: 'Email'),
+                    decoration: InputDecoration(labelText: tr('Email')),
                   ),
                   const SizedBox(height: 16),
                   TextField(
                     controller: password,
                     obscureText: true,
                     autofillHints: const [AutofillHints.password],
-                    decoration: const InputDecoration(labelText: 'Password'),
+                    decoration: InputDecoration(labelText: tr('Password')),
                   ),
                   const SizedBox(height: 20),
                   FilledButton(
@@ -355,8 +420,9 @@ class _AuthScreenState extends State<AuthScreen> {
                               );
                               if (mounted) {
                                 setState(
-                                  () => message =
-                                      'Check your email to verify your account, then sign in.',
+                                  () => message = tr(
+                                    'Check your email to verify your account, then sign in.',
+                                  ),
                                 );
                               }
                             } else {
@@ -369,11 +435,13 @@ class _AuthScreenState extends State<AuthScreen> {
                             password.clear();
                           }),
                     child: Text(
-                      busy
-                          ? 'Please wait…'
-                          : register
-                          ? 'Create account'
-                          : 'Sign in',
+                      tr(
+                        busy
+                            ? 'Please wait…'
+                            : register
+                            ? 'Create account'
+                            : 'Sign in',
+                      ),
                     ),
                   ),
                   TextButton(
@@ -381,9 +449,11 @@ class _AuthScreenState extends State<AuthScreen> {
                         ? null
                         : () => setState(() => register = !register),
                     child: Text(
-                      register
-                          ? 'Already registered? Sign in'
-                          : 'Create an account',
+                      tr(
+                        register
+                            ? 'Already registered? Sign in'
+                            : 'Create an account',
+                      ),
                     ),
                   ),
                   TextButton(
@@ -405,37 +475,34 @@ class _AuthScreenState extends State<AuthScreen> {
                               );
                               if (mounted) {
                                 setState(
-                                  () => message =
-                                      'If registered, recovery instructions will be sent.',
+                                  () => message = tr(
+                                    'If registered, recovery instructions will be sent.',
+                                  ),
                                 );
                               }
                             },
                             authFailureMessage:
                                 'Password recovery could not be requested. Check the address and try again.',
                           ),
-                    child: const Text('Forgot password?'),
+                    child: Text(tr('Forgot password?')),
                   ),
                 ] else ...[
                   Text(
-                    'Choose your clinic',
+                    tr('Choose your clinic'),
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  for (final row in memberships)
-                    Card(
-                      child: ListTile(
-                        title: Text((row['clinics'] as Map)['name'] as String),
-                        subtitle: Text(row['role'] as String),
-                        trailing: const Icon(Icons.chevron_right),
-                        onTap: busy ? null : () => act(() => selectClinic(row)),
-                      ),
-                    ),
+                  for (final row in memberships) clinicTile(row),
                   if (offlineLease != null)
                     Card(
                       child: ListTile(
                         leading: const Icon(Icons.offline_bolt_outlined),
                         title: Text(offlineLease!.session.clinicName),
                         subtitle: Text(
-                          'Saved offline access · expires ${DateFormat('d MMM, HH:mm').format(offlineLease!.expiresAt.toLocal())}',
+                          tr("Saved offline access · expires {0}", [
+                            DateFormat(
+                              'd MMM, HH:mm',
+                            ).format(offlineLease!.expiresAt.toLocal()),
+                          ]),
                         ),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: busy
@@ -446,18 +513,20 @@ class _AuthScreenState extends State<AuthScreen> {
                       ),
                     ),
                   if (memberships.isEmpty && offlineLease == null)
-                    const Padding(
+                    Padding(
                       padding: EdgeInsets.symmetric(vertical: 12),
                       child: Text(
-                        'No clinic membership yet. Create your clinic or enter an invitation from the doctor.',
+                        tr(
+                          'No clinic membership yet. Create your clinic or enter an invitation from the doctor.',
+                        ),
                       ),
                     ),
                   if (widget.kind == AppKind.doctor) ...[
                     const SizedBox(height: 20),
                     TextField(
                       controller: clinicName,
-                      decoration: const InputDecoration(
-                        labelText: 'New clinic name',
+                      decoration: InputDecoration(
+                        labelText: tr('New clinic name'),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -471,7 +540,7 @@ class _AuthScreenState extends State<AuthScreen> {
                               );
                               await loadClinics();
                             }),
-                      child: const Text('Create private clinic'),
+                      child: Text(tr('Create private clinic')),
                     ),
                   ],
                   const SizedBox(height: 20),
@@ -479,8 +548,8 @@ class _AuthScreenState extends State<AuthScreen> {
                     controller: invitation,
                     autocorrect: false,
                     enableSuggestions: false,
-                    decoration: const InputDecoration(
-                      labelText: 'Doctor’s invitation code',
+                    decoration: InputDecoration(
+                      labelText: tr('Doctor’s invitation code'),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -495,11 +564,11 @@ class _AuthScreenState extends State<AuthScreen> {
                             invitation.clear();
                             await loadClinics();
                           }),
-                    child: const Text('Join private clinic'),
+                    child: Text(tr('Join private clinic')),
                   ),
                   TextButton(
                     onPressed: busy ? null : () => act(loadClinicsForEntry),
-                    child: const Text('Refresh clinic access'),
+                    child: Text(tr('Refresh clinic access')),
                   ),
                   TextButton(
                     onPressed: busy
@@ -509,23 +578,18 @@ class _AuthScreenState extends State<AuthScreen> {
                             await widget.client.auth.signOut();
                             memberships = [];
                           }),
-                    child: const Text('Sign out'),
+                    child: Text(tr('Sign out')),
                   ),
                 ],
-                if (message != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Text(message!, textAlign: TextAlign.center),
-                  ),
                 const SizedBox(height: 20),
-                const Text(
-                  'Development only · Use fictional patient data.',
+                Text(
+                  tr('Development only · Use fictional patient data.'),
                   textAlign: TextAlign.center,
                 ),
                 if (widget.onDemo != null)
                   TextButton(
                     onPressed: busy ? null : widget.onDemo,
-                    child: const Text('Open fictional local preview'),
+                    child: Text(tr('Open fictional local preview')),
                   ),
               ],
             ),
@@ -580,12 +644,14 @@ class _PasswordRecoveryPanelState extends State<PasswordRecoveryPanel> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       Text(
-        'Choose a new password',
+        tr('Choose a new password'),
         style: Theme.of(context).textTheme.titleLarge,
       ),
       const SizedBox(height: 8),
-      const Text(
-        'This recovery link is single-purpose. After the password changes, sign in again.',
+      Text(
+        tr(
+          'This recovery link is single-purpose. After the password changes, sign in again.',
+        ),
       ),
       const SizedBox(height: 20),
       TextField(
@@ -593,7 +659,7 @@ class _PasswordRecoveryPanelState extends State<PasswordRecoveryPanel> {
         controller: password,
         obscureText: true,
         autofillHints: const [AutofillHints.newPassword],
-        decoration: const InputDecoration(labelText: 'New password'),
+        decoration: InputDecoration(labelText: tr('New password')),
       ),
       const SizedBox(height: 16),
       TextField(
@@ -602,20 +668,20 @@ class _PasswordRecoveryPanelState extends State<PasswordRecoveryPanel> {
         obscureText: true,
         autofillHints: const [AutofillHints.newPassword],
         onSubmitted: widget.busy ? null : (_) => submit(),
-        decoration: const InputDecoration(labelText: 'Confirm new password'),
+        decoration: InputDecoration(labelText: tr('Confirm new password')),
       ),
       if (error != null)
         Padding(
           padding: const EdgeInsets.only(top: 12),
           child: Text(
-            error!,
+            tr(error!),
             style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
         ),
       const SizedBox(height: 20),
       FilledButton(
         onPressed: widget.busy ? null : submit,
-        child: Text(widget.busy ? 'Updating…' : 'Update password'),
+        child: Text(tr(widget.busy ? 'Updating…' : 'Update password')),
       ),
     ],
   );

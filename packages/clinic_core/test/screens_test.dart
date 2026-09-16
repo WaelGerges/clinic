@@ -358,6 +358,27 @@ void main() {
     );
   });
 
+  test('each app says which one opens a membership it cannot open', () {
+    // The clinic list shows every membership the account has, so a doctor
+    // account signed into the Assistant App sees its clinic there. Tapping it
+    // used to fail with the reason rendered below the fold; the row now
+    // carries the reason and refuses the tap.
+    expect(clinicRoleMismatch(AppKind.assistant, 'assistant'), isNull);
+    expect(clinicRoleMismatch(AppKind.doctor, 'doctor'), isNull);
+    expect(
+      clinicRoleMismatch(AppKind.assistant, 'doctor'),
+      'Use the Doctor App for this clinic role.',
+    );
+    expect(
+      clinicRoleMismatch(AppKind.doctor, 'assistant'),
+      'Use the Assistant App for this clinic role.',
+    );
+    // An unrecognised role is refused rather than opened.
+    for (final kind in AppKind.values) {
+      expect(clinicRoleMismatch(kind, 'auditor'), isNotNull);
+    }
+  });
+
   testWidgets('password recovery validates and submits the replacement', (
     tester,
   ) async {

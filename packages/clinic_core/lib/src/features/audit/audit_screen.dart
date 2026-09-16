@@ -1,3 +1,4 @@
+import 'package:clinic_core/src/presentation/language.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -84,11 +85,11 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
     final canReview = _canReview(repository);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Audit and access'),
+        title: Text(tr('Audit and access')),
         actions: [
           if (canReview)
             IconButton(
-              tooltip: 'Refresh audit history',
+              tooltip: tr('Refresh audit history'),
               onPressed: loading || loadingOlder
                   ? null
                   : () => load(reset: true),
@@ -97,11 +98,12 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
         ],
       ),
       body: !canReview
-          ? const EmptyPanel(
+          ? EmptyPanel(
               icon: Icons.admin_panel_settings_outlined,
               title: 'Online doctor administrator access required',
-              message:
-                  'Sign into a real development clinic as its doctor administrator to review audit history. Saved offline access and preview mode cannot open it.',
+              message: tr(
+                'Sign into a real development clinic as its doctor administrator to review audit history. Saved offline access and preview mode cannot open it.',
+              ),
             )
           : RefreshIndicator(
               onRefresh: () => load(reset: true),
@@ -109,10 +111,12 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                 padding: const EdgeInsets.all(20),
                 physics: const AlwaysScrollableScrollPhysics(),
                 children: [
-                  const SectionCard(
+                  SectionCard(
                     title: 'Privacy-safe event history',
                     child: Text(
-                      'This view shows who acted, what changed, the affected record identifier, and when it happened. Raw clinical before/after values are intentionally excluded.',
+                      tr(
+                        'This view shows who acted, what changed, the affected record identifier, and when it happened. Raw clinical before/after values are intentionally excluded.',
+                      ),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -125,25 +129,26 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                     EmptyPanel(
                       icon: Icons.error_outline,
                       title: 'Unable to load audit history',
-                      message: error!,
+                      message: tr(error!),
                       action: FilledButton.tonal(
                         onPressed: () => load(reset: true),
-                        child: const Text('Retry'),
+                        child: Text(tr('Retry')),
                       ),
                     )
                   else if (events.isEmpty)
-                    const EmptyPanel(
+                    EmptyPanel(
                       icon: Icons.history_toggle_off,
                       title: 'No audit events yet',
-                      message:
-                          'Events will appear here after protected clinic actions are recorded.',
+                      message: tr(
+                        'Events will appear here after protected clinic actions are recorded.',
+                      ),
                     )
                   else ...[
                     for (final event in events) AuditEventCard(event: event),
                     if (error != null)
                       Padding(
                         padding: const EdgeInsets.all(12),
-                        child: Text(error!, textAlign: TextAlign.center),
+                        child: Text(tr(error!), textAlign: TextAlign.center),
                       ),
                     if (hasOlder)
                       Padding(
@@ -161,7 +166,7 @@ class _AuditScreenState extends ConsumerState<AuditScreen> {
                                 )
                               : const Icon(Icons.expand_more),
                           label: Text(
-                            loadingOlder ? 'Loading…' : 'Load older events',
+                            tr(loadingOlder ? 'Loading…' : 'Load older events'),
                           ),
                         ),
                       ),
@@ -187,11 +192,15 @@ class AuditEventCard extends StatelessWidget {
       key: Key('audit-event-${event.id}'),
       child: ListTile(
         leading: const CircleAvatar(child: Icon(Icons.policy_outlined)),
-        title: Text(event.action),
+        title: Text(tr(event.action)),
         subtitle: Text(
-          '${event.actorRole} · Actor $actor\n'
-          '${event.objectType} · $object\n'
-          '${DateFormat('d MMM y, HH:mm').format(cairoTime)} Cairo',
+          tr("{0} · Actor {1}\n{2} · {3}\n{4} Cairo", [
+            tr(event.actorRole),
+            actor,
+            tr(event.objectType),
+            object,
+            DateFormat('d MMM y, HH:mm').format(cairoTime),
+          ]),
         ),
         isThreeLine: true,
       ),

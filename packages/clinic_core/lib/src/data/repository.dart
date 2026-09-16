@@ -1,3 +1,4 @@
+import '../domain/scheduling.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
@@ -264,6 +265,23 @@ class ClinicRepository {
     });
   }
 
+  /// Reads a patient, falling back to the server when it is not cached.
+  ///
+  /// Screens that resolve a patient by id held in server-side state (the
+  /// scheduling waitlist) must not render "unavailable" merely because the
+  /// record sits outside the cached pages.
+  Future<Patient?> patientOrFetch(String id) async {
+    final local = await patient(id);
+    if (local != null) return local;
+    final remote = gateway;
+    if (remote == null) return null;
+    final values = await remote.patientsByIds(session.clinicId, [id]);
+    if (values.isEmpty) return null;
+    _checkClinic(values.single.clinicId);
+    await _cachePatients(values);
+    return values.single;
+  }
+
   Future<List<Appointment>> appointments({DateTime? day}) async {
     final date = day ?? ClinicTime.local(clock());
     final bounds = ClinicTime.dayBounds(date);
@@ -299,6 +317,38 @@ class ClinicRepository {
         )
         .get();
     return rows.isEmpty ? null : Appointment.fromMap(rows.first.data);
+  }
+
+  Future<Visit> visitForPrinting(String patientId, String visitId) async {
+    if (!session.clinicalRead) {
+      throw const ClinicFailure('forbidden', 'Clinical access restricted');
+    }
+    final remote = gateway;
+    if (!session.isDemo) {
+      if (remote is! ClinicVisitExportGateway) {
+        throw const ClinicFailure(
+          'offline',
+          'Connect to refresh the saved visit before printing.',
+        );
+      }
+      await remote!.verifySession(session);
+      return (remote as ClinicVisitExportGateway).printableVisit(
+        session.clinicId,
+        patientId,
+        visitId,
+      );
+    }
+    for (var offset = 0; ; offset += 50) {
+      final rows = await visits(patientId, offset: offset);
+      final found = rows.where((v) => v.id == visitId).firstOrNull;
+      if (found != null) return found;
+      if (rows.length < 50) {
+        throw const ClinicFailure(
+          'not_found',
+          'The saved visit is unavailable.',
+        );
+      }
+    }
   }
 
   Future<List<Visit>> visits(String patientId, {int offset = 0}) async {
@@ -683,6 +733,113 @@ class ClinicRepository {
           .map((e) => e.data)
           .toList();
 
+  /// Discards a request the server definitively rejected.
+  ///
+  /// Only the `failed` state is eligible: it is reached solely after a
+  /// non-transient server rejection, so the request was never applied. A
+  /// `pending`/`sending` request may already have reached the server and is
+  /// never discarded here. Without this, one rejected request blocks every
+  /// later operation, document upload and shared action indefinitely.
+  ///
+  /// The local record still holds the version the server refused, so it is
+  /// restored from the server before the queue resumes.
+  Future<void> discardRejectedOperation(String operationId) async {
+    if (_closed || _criticalInProgress || _resolutionInProgress) {
+      throw const ClinicFailure(
+        'busy',
+        'Wait for the current action to finish.',
+      );
+    }
+    await _verifySession();
+    final rows = await pendingOperations();
+    final row = rows.where((r) => r['operation_id'] == operationId).firstOrNull;
+    if (row == null || row['state'] != 'failed') {
+      throw const ClinicFailure(
+        'review_changed',
+        'This request is no longer waiting for review. Refresh synchronization.',
+      );
+    }
+    final type = row['entity_type'] as String,
+        id = row['entity_id'] as String,
+        sequence = row['sequence'] as int;
+    // Later queued work for the same record would be left expecting a version
+    // this request was going to create, so it must be reviewed first.
+    if (rows.any(
+      (r) =>
+          r['entity_type'] == type &&
+          r['entity_id'] == id &&
+          (r['sequence'] as int) > sequence,
+    )) {
+      throw const ClinicFailure(
+        'review_changed',
+        'A newer queued change for this record must be reviewed first.',
+      );
+    }
+    await db.customStatement(
+      "DELETE FROM outbox WHERE operation_id=? AND state='failed'",
+      [operationId],
+    );
+    await _restoreRejectedEntity(type, id);
+    _changed();
+  }
+
+  /// Replaces the locally cached record with the server's copy after a
+  /// rejected request, so the next save sends the version the server holds.
+  Future<void> _restoreRejectedEntity(String type, String id) async {
+    final remote = gateway;
+    if (remote == null) return;
+    switch (type) {
+      case 'patient':
+        final values = await remote.patientsByIds(session.clinicId, [id]);
+        if (values.isEmpty) {
+          await _forgetRejectedPatient(id);
+        } else {
+          _checkClinic(values.single.clinicId);
+          await _writePatient(values.single);
+        }
+      case 'appointment':
+        final values = await remote.appointmentsByIds(session.clinicId, [id]);
+        if (values.isNotEmpty) {
+          _checkClinic(values.single.clinicId);
+          await _writeAppointment(values.single);
+        } else {
+          await db.customStatement(
+            'DELETE FROM cached_appointments WHERE clinic_id=? AND id=? AND NOT EXISTS'
+            '(SELECT 1 FROM cached_visits WHERE appointment_id=?)',
+            [session.clinicId, id, id],
+          );
+        }
+      case 'visit':
+        final rows = await db
+            .customSelect(
+              'SELECT patient_id FROM cached_visits WHERE clinic_id=? AND id=?',
+              variables: [Variable(session.clinicId), Variable(id)],
+            )
+            .get();
+        if (rows.isNotEmpty) {
+          await refreshVisits(rows.first.data['patient_id'] as String);
+        }
+    }
+  }
+
+  /// Removes a patient the server never accepted, provided nothing local
+  /// depends on it. Anything still referencing it is kept for review.
+  Future<void> _forgetRejectedPatient(String id) async {
+    final referenced = await db
+        .customSelect(
+          'SELECT 1 FROM cached_appointments WHERE patient_id=? '
+          'UNION ALL SELECT 1 FROM cached_documents WHERE patient_id=? LIMIT 1',
+          variables: [Variable(id), Variable(id)],
+        )
+        .get();
+    if (referenced.isEmpty) {
+      await db.customStatement(
+        'DELETE FROM cached_patients WHERE clinic_id=? AND id=?',
+        [session.clinicId, id],
+      );
+    }
+  }
+
   Future<void> _verifySession() async {
     if (_closed || gateway == null) {
       throw const ClinicFailure(
@@ -965,6 +1122,62 @@ class ClinicRepository {
     await savePatient(value.copyWith(archived: archive));
   }
 
+  ScheduleSettings _scheduleSettings = const ScheduleSettings();
+  final List<Map<String, dynamic>> _demoWaitlist = [];
+  Future<Map<String, dynamic>> scheduleAction(
+    String action, [
+    Map<String, dynamic> payload = const {},
+  ]) async {
+    if (session.isDemo) {
+      if (action == 'settings') {
+        if ((payload['periods'] as List? ?? const []).isEmpty) {
+          throw const ClinicFailure(
+            'EMPTY_SCHEDULE',
+            'Add at least one working period, or clear the working hours so any time can be booked.',
+          );
+        }
+        _scheduleSettings = ScheduleSettings.fromMap({
+          ...payload,
+          'configured': true,
+        });
+      }
+      if (action == 'settings_clear') {
+        _scheduleSettings = const ScheduleSettings();
+      }
+      if (action == 'waitlist_add') {
+        _demoWaitlist.removeWhere(
+          (v) => v['patient_id'] == payload['patient_id'],
+        );
+        _demoWaitlist.add({...payload, 'id': payload['patient_id']});
+      }
+      if (action == 'waitlist_remove') {
+        _demoWaitlist.removeWhere((v) => v['id'] == payload['id']);
+      }
+      return {'settings': _scheduleSettings.toMap(), 'waitlist': _demoWaitlist};
+    }
+    final remote = gateway;
+    if (remote is! ClinicSchedulingGateway) {
+      throw const ClinicFailure(
+        'offline',
+        'Connect to load shared scheduling settings.',
+      );
+    }
+    await remote!.verifySession(session);
+    return (remote as ClinicSchedulingGateway).schedule(
+      session.clinicId,
+      session.doctorId,
+      action,
+      payload,
+    );
+  }
+
+  Future<ScheduleSettings> schedulingSettings() async {
+    final data = await scheduleAction('read');
+    return ScheduleSettings.fromMap(
+      Map<String, dynamic>.from(data['settings'] as Map),
+    );
+  }
+
   Future<void> saveAppointment(Appointment value) async {
     _checkClinic(value.clinicId);
     await _requireNoPendingCritical('appointment', value.id);
@@ -992,8 +1205,23 @@ class ClinicRepository {
         'Use the appointment status actions.',
       );
     }
+    if (value.durationMinutes < 5 || value.durationMinutes > 240) {
+      throw const ClinicFailure(
+        'validation',
+        'Choose a duration between 5 and 240 minutes.',
+      );
+    }
     final next = value.copyWith(version: value.version + 1);
     await db.transaction(() async {
+      if (appointmentOverlaps(
+        value,
+        await appointments(day: ClinicTime.local(value.startsAt)),
+      )) {
+        throw const ClinicFailure(
+          'conflict',
+          'This time overlaps another appointment. Choose an available slot.',
+        );
+      }
       await _writeAppointment(next);
       await _enqueue(
         'appointment',
@@ -1009,9 +1237,11 @@ class ClinicRepository {
   Future<void> changeStatus(Appointment value, AppointmentStatus next) async {
     _checkClinic(value.clinicId);
     requireTransition(value.status, next);
+    // Entering the doctor and completing stay on their dedicated paths.
+    // Leaving the doctor for the queue or a cancellation is an ordinary
+    // status change, so a stranded patient can always be released.
     if (next == AppointmentStatus.completed ||
-        next == AppointmentStatus.withDoctor ||
-        value.status == AppointmentStatus.withDoctor) {
+        next == AppointmentStatus.withDoctor) {
       throw const ClinicFailure(
         'protected_transition',
         'Use the consultation handoff or completion action.',
@@ -1455,31 +1685,76 @@ class ClinicRepository {
     });
   }
 
+  /// Server page size for patient reads, and the cap on how many pages one
+  /// reconciliation walks so a large clinic cannot stall the app.
+  static const patientPageSize = 50;
+  static const maxReconcilePages = 40;
+  static const reconcileInterval = Duration(minutes: 5);
+  DateTime? _lastReconcile;
+
+  Future<void> _cachePatients(List<Patient> values) async {
+    await db.transaction(() async {
+      for (final p in values) {
+        _checkClinic(p.clinicId);
+        if (await _dirty('patient', p.id)) continue;
+        final existing = await patient(p.id);
+        if (existing == null || existing.version < p.version) {
+          await _writePatient(p);
+        }
+      }
+    });
+  }
+
+  /// Pages through active *and* archived patients.
+  ///
+  /// Reading only the first active page left records beyond it permanently
+  /// stale, and an archive performed on another device was never observed at
+  /// all, because the archived record no longer appears in the active page.
+  /// The server exposes no patient delete, so re-reading both states is
+  /// sufficient and no tombstone protocol is needed here.
+  Future<void> reconcilePatients() async {
+    if (gateway == null || _closed) return;
+    for (final archived in const [false, true]) {
+      for (var page = 0; page < maxReconcilePages; page++) {
+        if (_closed) return;
+        final remote = await gateway!.patients(
+          clinicId: session.clinicId,
+          offset: page * patientPageSize,
+          archived: archived,
+        );
+        if (remote.isEmpty) break;
+        await _cachePatients(remote);
+        if (remote.length < patientPageSize) break;
+      }
+    }
+    _lastReconcile = clock().toUtc();
+  }
+
   Future<void> refresh({
     String search = '',
     int offset = 0,
     bool archived = false,
+    bool full = false,
   }) async {
     if (gateway == null) return;
     await _verifySession();
-    final remote = await gateway!.patients(
-      clinicId: session.clinicId,
-      search: search,
-      offset: offset,
-      archived: archived,
-    );
-    await db.transaction(() async {
-      for (final p in remote) {
-        _checkClinic(p.clinicId);
-        if (!await _dirty('patient', p.id) &&
-            (await patient(p.id))?.version != p.version) {
-          final existing = await patient(p.id);
-          if (existing == null || existing.version < p.version) {
-            await _writePatient(p);
-          }
-        }
-      }
-    });
+    final last = _lastReconcile;
+    final due =
+        full ||
+        last == null ||
+        clock().toUtc().difference(last) >= reconcileInterval;
+    if (due && search.isEmpty && offset == 0 && !archived) {
+      await reconcilePatients();
+    } else {
+      await _cachePatients(
+        await gateway!.patients(
+          clinicId: session.clinicId,
+          search: search,
+          offset: offset,
+          archived: archived,
+        ),
+      );
+    }
     await refreshAppointments();
     for (final id in _watchedHistory.keys.toList()) {
       await refreshVisits(id);

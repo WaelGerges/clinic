@@ -321,15 +321,18 @@ class Appointment {
     this.type = 'Consultation',
     this.notes = '',
     this.version = 0,
+    this.durationMinutes = 30,
   });
   final String id, clinicId, patientId, doctorId, type, notes;
   final DateTime startsAt;
   final AppointmentStatus status;
-  final int version;
+  final int version, durationMinutes;
+  DateTime get endsAt => startsAt.add(Duration(minutes: durationMinutes));
   Appointment copyWith({
     AppointmentStatus? status,
     DateTime? startsAt,
     int? version,
+    int? durationMinutes,
   }) => Appointment(
     id: id,
     clinicId: clinicId,
@@ -340,6 +343,7 @@ class Appointment {
     type: type,
     notes: notes,
     version: version ?? this.version,
+    durationMinutes: durationMinutes ?? this.durationMinutes,
   );
   Map<String, Object?> toMap() => {
     'id': id,
@@ -351,6 +355,7 @@ class Appointment {
     'appointment_type': type,
     'notes': notes,
     'version': version,
+    'duration_minutes': durationMinutes,
   };
   factory Appointment.fromMap(Map<String, dynamic> row) => Appointment(
     id: row['id'] as String,
@@ -362,6 +367,7 @@ class Appointment {
     type: row['appointment_type'] as String? ?? 'Consultation',
     notes: row['notes'] as String? ?? '',
     version: (row['version'] as num?)?.toInt() ?? 0,
+    durationMinutes: (row['duration_minutes'] as num?)?.toInt() ?? 30,
   );
 }
 
@@ -773,9 +779,13 @@ void requireTransition(AppointmentStatus from, AppointmentStatus to) {
       AppointmentStatus.withDoctor,
       AppointmentStatus.cancelled,
     },
+    // A patient must be able to leave the doctor without a visit. Otherwise a
+    // mis-sent patient or a walkout holds the doctor's only active slot until
+    // a diagnosis is invented to complete the visit.
     AppointmentStatus.withDoctor: {
       AppointmentStatus.completed,
       AppointmentStatus.waiting,
+      AppointmentStatus.cancelled,
     },
   };
   if (!(allowed[from]?.contains(to) ?? false)) {
