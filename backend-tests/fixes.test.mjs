@@ -1,5 +1,5 @@
 // Regression tests for the corrections in
-// supabase/migrations/20260912164500_clinic_amendment_queue_and_schedule_fixes.sql
+// supabase/migrations/20260916215601_clinic_amendment_queue_and_schedule_fixes.sql
 //
 // Each test fails against the previously deployed behaviour.
 import { before, after, test } from 'node:test';

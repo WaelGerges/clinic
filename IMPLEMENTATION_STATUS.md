@@ -17,7 +17,7 @@ A review of the local working tree found defects in the 12 September feature wor
 
 **Other client fixes.** Assistants bind to a deterministically ordered doctor instead of an arbitrary row; the scheduling waitlist resolves patients from the server when they are not cached; PDF text direction follows the document language so a mixed-script line no longer flips; PDF numerals are normalized to Western digits.
 
-**Pending migration.** `supabase/migrations/20260912164500_clinic_amendment_queue_and_schedule_fixes.sql` is written and passes locally but is **not deployed**; deployment needs explicit approval.
+**Deployed migration.** `supabase/migrations/20260916215601_clinic_amendment_queue_and_schedule_fixes.sql` was deployed to clinic-chatgpt-dev on 16 September 2026.
 
 - Only the visit's own doctor may amend it. The deployed function checks the clinic doctor role only, so any active doctor can amend any completed visit — contrary to what this document and `README.md` previously claimed. Regression test included.
 - A patient with the doctor can return to the queue or be cancelled. Previously the only exit from `withDoctor` was completing a visit with a diagnosis, so a mis-sent patient or a walkout held the doctor's only active slot indefinitely.
