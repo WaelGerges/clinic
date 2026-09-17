@@ -17,7 +17,7 @@ A review of the local working tree found defects in the 12 September feature wor
 
 **Other client fixes.** Assistants bind to a deterministically ordered doctor instead of an arbitrary row; the scheduling waitlist resolves patients from the server when they are not cached; PDF text direction follows the document language so a mixed-script line no longer flips; PDF numerals are normalized to Western digits.
 
-**Pending migration (17 September 2026).** `supabase/migrations/20260917090000_clinic_input_bounds.sql` (server-side input bounds, security finding SEC-001) passes locally in `backend-tests/bounds.test.mjs` but is **not deployed**; deployment needs explicit approval. See `docs/reviews/2026-09-17-security-assessment.md`.
+**Deployed migration (17 September 2026).** `supabase/migrations/20260917114822_clinic_input_bounds.sql` (server-side input bounds, security finding SEC-001) passes locally in `backend-tests/bounds.test.mjs` and was deployed to clinic-chatgpt-dev on 17 September 2026 after approval. See `docs/reviews/2026-09-17-security-assessment.md`.
 
 **Deployed migration.** `supabase/migrations/20260916215601_clinic_amendment_queue_and_schedule_fixes.sql` was deployed to clinic-chatgpt-dev on 16 September 2026.
 

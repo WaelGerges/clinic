@@ -1,4 +1,4 @@
-// Regression tests for supabase/migrations/20260917090000_clinic_input_bounds.sql
+// Regression tests for supabase/migrations/20260917114822_clinic_input_bounds.sql
 // (security review 2026-09-17, SEC-001). Each rejection below was accepted by
 // the previously deployed schema.
 import { before, after, test } from 'node:test';

@@ -224,7 +224,7 @@ class Patient {
     return age;
   }
 
-  /// Server-enforced bounds (migration 20260917090000). Checked here too so
+  /// Server-enforced bounds (migration 20260917114822). Checked here too so
   /// the user sees a field-level message instead of a rejected sync request.
   static const maxNameLength = 300,
       maxSecondaryMobileLength = 40,
@@ -347,7 +347,7 @@ class Appointment {
   final int version, durationMinutes;
   DateTime get endsAt => startsAt.add(Duration(minutes: durationMinutes));
 
-  /// Server-enforced bounds (migration 20260917090000).
+  /// Server-enforced bounds (migration 20260917114822).
   static const maxTypeLength = 80, maxNotesLength = 2000;
 
   void validate() {
@@ -638,7 +638,7 @@ class ClinicDocument {
 
   static const maxBytes = 20 * 1024 * 1024;
 
-  /// Server-enforced bound (migration 20260917090000).
+  /// Server-enforced bound (migration 20260917114822).
   static const maxNotesLength = 2000;
   static const contentTypes = {
     'image/jpeg',

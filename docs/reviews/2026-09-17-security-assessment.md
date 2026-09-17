@@ -4,7 +4,7 @@
 
 **Rules observed:** no destructive action, no denial-of-service testing, no real data. Hosted probes were read-only catalog and aggregate queries. Reproductions run against fictional fixtures in PGlite.
 
-**Result:** 0 Critical · 1 High · 5 Medium · 7 Low · 6 Informational, plus 7 functional bugs. No exploitable cross-tenant, privilege-escalation, RLS-bypass or injection path was found. The High finding is a reliability defect that halts a device's clinic operations; it is fixed in this branch. The Medium security findings are input-bound, integrity, and configuration issues; one is fixed by an undeployed migration in this branch, the rest are specified with code.
+**Result:** 0 Critical · 1 High · 5 Medium · 7 Low · 6 Informational, plus 7 functional bugs. No exploitable cross-tenant, privilege-escalation, RLS-bypass or injection path was found. The High finding is a reliability defect that halts a device's clinic operations; it is fixed in this branch. The Medium security findings are input-bound, integrity, and configuration issues; one is fixed by a migration deployed on 17 September 2026, the rest are specified with code.
 
 ---
 
@@ -29,7 +29,7 @@ Two Flutter apps (Assistant, Doctor) share one package. Every network call goes 
 ### Highest-risk architectural weaknesses
 
 1. **Availability is a single shared queue.** One refused request on a device blocked every later request and every critical action on that device (BUG-001). Fixed here.
-2. **Server input bounds were incomplete.** Amendments were capped; ordinary visit, patient and appointment saves were not (SEC-001). Fixed here (migration pending deployment approval).
+2. **Server input bounds were incomplete.** Amendments were capped; ordinary visit, patient and appointment saves were not (SEC-001). Fixed here; migration deployed to clinic-chatgpt-dev on 17 September 2026.
 3. **Document content is verified only by the client.** The server records a client-asserted digest and enforces MIME by header only (SEC-002). Remediation specified.
 4. **No second factor and no local lock on a device that can hold eight hours of patient data offline** (SEC-003, SEC-005). Configuration and product decisions.
 
@@ -112,7 +112,7 @@ Not present: GraphQL (pg_graphql not installed), Edge Functions, webhooks, `post
 
 | ID | Severity | Vulnerability | Component | Exploitability | Confidence | Status |
 |---|---|---|---|---|---|---|
-| SEC-001 | Medium | Unbounded text and list sizes on visit/patient/appointment/document writes | PostgreSQL `apply_command`, `begin_attachment` | authenticated member | Confirmed | Fixed (migration, undeployed) |
+| SEC-001 | Medium | Unbounded text and list sizes on visit/patient/appointment/document writes | PostgreSQL `apply_command`, `begin_attachment` | authenticated member | Confirmed | Fixed (migration deployed 17 Sep 2026) |
 | SEC-002 | Medium | Document integrity digest and MIME are client-asserted; server checks size only | `finalize_attachment`, Storage policy | authenticated uploader | Confirmed | Specified |
 | SEC-003 | Medium | Leaked-password protection disabled; no MFA | Supabase Auth config | remote, credential stuffing | Confirmed (advisor) | Config action |
 | SEC-005 | Medium | No local authentication gate on an 8-hour offline lease; no iOS screenshot protection | Apps | physical access | Confirmed | Recommendation |
@@ -142,8 +142,8 @@ Not present: GraphQL (pg_graphql not installed), Edge Functions, webhooks, `post
 - **Evidence:** live definition contains no `length(` check on the save path; hosted `patients.notes` maximum today is 66 characters (no abuse observed).
 - **Safe reproduction (PGlite):** `backend-tests/bounds.test.mjs` — before the migration, `visit/save` with 51 diagnoses or 20 001-character notes is accepted.
 - **Root cause:** validation was added to the newer amendment function but not retrofitted to the original command; no table-level bounds.
-- **Remediation (implemented):** `supabase/migrations/20260917090000_clinic_input_bounds.sql` adds CHECK constraints on every free-text column, bounds diagnosis and item counts through `position < 50` / `position < 100`, adds a 1 MiB payload guard and appointment time bounds (not null, not more than one year past, not more than two years ahead) to `apply_command` using the project's guarded string-patch pattern. Client validation mirrors the limits (`Patient.validate`, `Appointment.validate`, `ClinicDocument.validate`) and `SupabaseClinicGateway.apply` maps SQLSTATE `23514` to a clear message.
-- **Verification:** `npm test` → `bounds.test.mjs` 5/5. After deployment: `select conname from pg_constraint where conname like '%_bound'` returns 18 rows; `pg_get_functiondef('clinic_private.apply_command(...)')` contains `pg_column_size(p_payload)`.
+- **Remediation (implemented):** `supabase/migrations/20260917114822_clinic_input_bounds.sql` adds CHECK constraints on every free-text column, bounds diagnosis and item counts through `position < 50` / `position < 100`, adds a 1 MiB payload guard and appointment time bounds (not null, not more than one year past, not more than two years ahead) to `apply_command` using the project's guarded string-patch pattern. Client validation mirrors the limits (`Patient.validate`, `Appointment.validate`, `ClinicDocument.validate`) and `SupabaseClinicGateway.apply` maps SQLSTATE `23514` to a clear message.
+- **Verification:** `npm test` → `bounds.test.mjs` 5/5. After deployment: `select conname from pg_constraint where conname like '%_bound'` returns 16 rows; `pg_get_functiondef('clinic_private.apply_command(...)')` contains `pg_column_size(p_payload)`.
 - **Adversarial review of the fix:** constraints are on the tables, so a future RPC cannot bypass them; the amendment path keeps its stricter checks; `23514` cannot be turned into a retry storm because the client marks it `failed`, not `pending`. Residual: PostgREST body size before the 1 MiB check is bounded only by platform limits.
 
 ### SEC-002 — Document digest and MIME are client-asserted
@@ -253,7 +253,7 @@ No `USING (true)`, no client-controlled tenant column, no UPDATE policy without 
 
 ## 5. Exploitation chains
 
-**Chain A — insider storage exhaustion (broken by this branch).** Assistant or doctor account → SEC-001 → 200 MB `visit/save` payloads → each write ×3 via audit → Realtime pushes the row to every device → caches grow, queries slow, project quota exhausted. Failed controls: none existed on the save path. Breakpoint: table CHECKs + 1 MiB guard (migration 20260917090000).
+**Chain A — insider storage exhaustion (broken by this branch).** Assistant or doctor account → SEC-001 → 200 MB `visit/save` payloads → each write ×3 via audit → Realtime pushes the row to every device → caches grow, queries slow, project quota exhausted. Failed controls: none existed on the save path. Breakpoint: table CHECKs + 1 MiB guard (migration 20260917114822).
 
 **Chain B — malicious document to code execution in a colleague's app.** Compromised member → uploads crafted bytes labelled `application/pdf` with matching self-computed SHA-256 (SEC-002) → colleague previews → pdfium parser flaw (SEC-013) → code runs inside the victim app with access to the decrypted cache and session. Preconditions: an unpatched pdfium bug. Breakpoints: server-side eTag/MD5 check and content sniffing (SEC-002 remediation), dependency currency, opening PDFs in the OS viewer instead of in-process.
 
@@ -286,7 +286,7 @@ No `USING (true)`, no client-controlled tenant column, no UPDATE policy without 
 ## 7. Remediation plan
 
 **Immediate (this branch, before next build)**
-1. Review and deploy `20260917090000_clinic_input_bounds.sql` after explicit approval (SEC-001, BUG-003).
+1. ~~Review and deploy `20260917114822_clinic_input_bounds.sql`~~ Deployed 17 September 2026 after approval; verified 16 constraints, payload guard and time bound live (SEC-001, BUG-003).
 2. Ship the client fixes in this branch (BUG-001, BUG-002, SEC-007, client bounds).
 3. Dashboard: enable leaked-password protection (SEC-003); add the two recovery redirect URLs (SEC-004).
 
