@@ -911,4 +911,20 @@ const arabicStrings = <String, String>{
   "Offline workspace: changes remain on this device.":
       "مساحة عمل دون اتصال: تبقى التغييرات على هذا الجهاز.",
   "Refresh finished.": "انتهى التحديث.",
+  // Security review 2026-09-17: conflict discard, input bounds, transient errors.
+  "Discard this conflicting request?": "تجاهل هذا الطلب المتعارض؟",
+  "Another device changed this record first, so the server did not apply this request. Discarding removes it from the queue, keeps its content in recovery history, and refreshes the saved record from the server. Re-enter any edit that is still needed.":
+      "غيّر جهاز آخر هذا السجل أولًا، لذا لم ينفّذ الخادم هذا الطلب. التجاهل يزيله من قائمة الانتظار ويحتفظ بمحتواه في سجل الاسترجاع ويحدّث السجل المحفوظ من الخادم. أعد إدخال أي تعديل ما زال مطلوبًا.",
+  "Tap a patient conflict to compare and merge versions. An appointment or clinical conflict can be discarded: its content is kept in recovery history and the saved record is refreshed from the server.":
+      "اضغط على تعارض مريض لمقارنة النسختين ودمجهما. يمكن تجاهل تعارض موعد أو كشف: يُحفظ محتواه في سجل الاسترجاع ويُحدَّث السجل المحفوظ من الخادم.",
+  "A patient field is too long. Shorten it before saving.":
+      "أحد حقول المريض طويل جدًا. اختصره قبل الحفظ.",
+  "The appointment type or notes are too long. Shorten them before saving.":
+      "نوع الموعد أو ملاحظاته طويلة جدًا. اختصرها قبل الحفظ.",
+  "Document notes are too long. Shorten them before saving.":
+      "ملاحظات المستند طويلة جدًا. اختصرها قبل الحفظ.",
+  "The clinic service is busy. The request is retained and will retry.":
+      "خدمة العيادة مشغولة. تم الاحتفاظ بالطلب وستُعاد المحاولة.",
+  "The server rejected this change because a field is too long or invalid. Review the record.":
+      "رفض الخادم هذا التغيير لأن أحد الحقول طويل جدًا أو غير صالح. راجع السجل.",
 };

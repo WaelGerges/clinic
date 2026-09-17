@@ -224,9 +224,27 @@ class Patient {
     return age;
   }
 
+  /// Server-enforced bounds (migration 20260917090000). Checked here too so
+  /// the user sees a field-level message instead of a rejected sync request.
+  static const maxNameLength = 300,
+      maxSecondaryMobileLength = 40,
+      maxAddressLength = 500,
+      maxNotesLength = 5000,
+      maxAlertsLength = 2000;
+
   void validate(DateTime today) {
     if (name.trim().length < 2) {
       throw const ClinicFailure('validation', 'Enter the patient’s full name.');
+    }
+    if (name.trim().length > maxNameLength ||
+        secondaryMobile.length > maxSecondaryMobileLength ||
+        address.length > maxAddressLength ||
+        notes.length > maxNotesLength ||
+        alerts.length > maxAlertsLength) {
+      throw const ClinicFailure(
+        'validation',
+        'A patient field is too long. Shorten it before saving.',
+      );
     }
     if (birthDate.isAfter(DateTime.utc(today.year, today.month, today.day))) {
       throw const ClinicFailure(
@@ -328,6 +346,26 @@ class Appointment {
   final AppointmentStatus status;
   final int version, durationMinutes;
   DateTime get endsAt => startsAt.add(Duration(minutes: durationMinutes));
+
+  /// Server-enforced bounds (migration 20260917090000).
+  static const maxTypeLength = 80, maxNotesLength = 2000;
+
+  void validate() {
+    if (durationMinutes < 5 || durationMinutes > 240) {
+      throw const ClinicFailure(
+        'validation',
+        'Choose a duration between 5 and 240 minutes.',
+      );
+    }
+    if (type.trim().isEmpty ||
+        type.trim().length > maxTypeLength ||
+        notes.length > maxNotesLength) {
+      throw const ClinicFailure(
+        'validation',
+        'The appointment type or notes are too long. Shorten them before saving.',
+      );
+    }
+  }
   Appointment copyWith({
     AppointmentStatus? status,
     DateTime? startsAt,
@@ -599,6 +637,9 @@ class ClinicDocument {
   });
 
   static const maxBytes = 20 * 1024 * 1024;
+
+  /// Server-enforced bound (migration 20260917090000).
+  static const maxNotesLength = 2000;
   static const contentTypes = {
     'image/jpeg',
     'image/png',
@@ -680,6 +721,12 @@ class ClinicDocument {
       throw const ClinicFailure(
         'invalid_document',
         'The document integrity digest is invalid.',
+      );
+    }
+    if (notes.length > maxNotesLength) {
+      throw const ClinicFailure(
+        'invalid_document',
+        'Document notes are too long. Shorten them before saving.',
       );
     }
   }

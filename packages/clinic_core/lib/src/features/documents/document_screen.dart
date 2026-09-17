@@ -43,8 +43,30 @@ class _ClinicDocumentsPanelState extends ConsumerState<ClinicDocumentsPanel> {
   @override
   void initState() {
     super.initState();
+    unawaited(_sweepSharedCopies());
     unawaited(_recoverLostImage());
     unawaited(refresh());
+  }
+
+  /// Removes decrypted copies left in the temporary directory by a share that
+  /// never returned (process death, crash). A completed share deletes its own
+  /// copy; anything older than [staleSharedCopy] is an orphan.
+  static const staleSharedCopy = Duration(minutes: 10);
+  Future<void> _sweepSharedCopies() async {
+    try {
+      final directory = await getTemporaryDirectory();
+      final cutoff = DateTime.now().subtract(staleSharedCopy);
+      await for (final entry in directory.list(followLinks: false)) {
+        if (entry is! File || !p.basename(entry.path).startsWith('clinic_')) {
+          continue;
+        }
+        if ((await entry.lastModified()).isBefore(cutoff)) {
+          await entry.delete();
+        }
+      }
+    } catch (_) {
+      // Best effort; the share path itself still deletes on completion.
+    }
   }
 
   Future<void> _recoverLostImage() async {

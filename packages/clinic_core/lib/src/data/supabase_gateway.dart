@@ -542,6 +542,22 @@ class SupabaseClinicGateway
           'The clinic command service is unavailable or incompatible. Your local work is retained.',
         );
       }
+      // A serialization failure, deadlock, cancelled statement or exhausted
+      // pool is not a verdict on the request. Marking it 'failed' would park
+      // the request until someone discards it by hand; 'unavailable' keeps
+      // it pending and retries with backoff.
+      if (isTransientPostgrestCode(e.code)) {
+        throw const ClinicFailure(
+          'unavailable',
+          'The clinic service is busy. The request is retained and will retry.',
+        );
+      }
+      if (e.code == '23514') {
+        throw const ClinicFailure(
+          'rejected',
+          'The server rejected this change because a field is too long or invalid. Review the record.',
+        );
+      }
       const messages = {
         'DOCTOR_BUSY':
             'Another patient is with the doctor. Finish that consultation first.',
@@ -728,6 +744,21 @@ class SupabaseClinicGateway
     );
     return controller.stream;
   }
+}
+
+/// SQLSTATE and PostgREST codes that describe the server's condition rather
+/// than the request: retrying the same request later can succeed.
+///
+/// 08xxx connection exceptions, 40xxx transaction rollbacks (serialization
+/// failure, deadlock), 53xxx insufficient resources, 55P03 lock not available,
+/// 57014 statement cancelled, 57P0x server shutdown, and PostgREST's
+/// connection-pool and timeout codes.
+bool isTransientPostgrestCode(String? code) {
+  if (code == null) return false;
+  if (code == '55P03' || code == '57014') return true;
+  if (code.startsWith('57P')) return true;
+  if (RegExp(r'^(08|40|53)[0-9A-Z]{3}$').hasMatch(code)) return true;
+  return const {'PGRST000', 'PGRST001', 'PGRST002', 'PGRST003'}.contains(code);
 }
 
 String schedulingError(String code) => switch (code) {

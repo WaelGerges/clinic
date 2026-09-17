@@ -1,7 +1,7 @@
 name: clinic_core
 description: Shared clinic domain, data and presentation features.
 publish_to: none
-version: 0.1.0
+version: 0.2.0
 resolution: workspace
 environment:
   sdk: '>=3.12.0 <4.0.0'

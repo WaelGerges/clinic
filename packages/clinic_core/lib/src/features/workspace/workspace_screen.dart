@@ -203,15 +203,24 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
   Future<void> discardRejected(
     BuildContext context,
     ClinicRepository repo,
-    String operationId,
-  ) async {
+    String operationId, {
+    bool conflict = false,
+  }) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(tr('Discard this rejected request?')),
+        title: Text(
+          tr(
+            conflict
+                ? 'Discard this conflicting request?'
+                : 'Discard this rejected request?',
+          ),
+        ),
         content: Text(
           tr(
-            'The server rejected this request and did not apply it. Discarding removes it from the queue so the remaining changes can synchronize, and refreshes the saved record from the server. Any edit it contained will need to be made again.',
+            conflict
+                ? 'Another device changed this record first, so the server did not apply this request. Discarding removes it from the queue, keeps its content in recovery history, and refreshes the saved record from the server. Re-enter any edit that is still needed.'
+                : 'The server rejected this request and did not apply it. Discarding removes it from the queue so the remaining changes can synchronize, and refreshes the saved record from the server. Any edit it contained will need to be made again.',
           ),
         ),
         actions: [
@@ -321,12 +330,13 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                           ),
                         ]),
                       ),
-                      trailing: row['state'] == 'failed'
+                      trailing: ClinicRepository.isDiscardable(row)
                           ? TextButton(
                               onPressed: () => discardRejected(
                                 context,
                                 repo,
                                 row['operation_id'] as String,
+                                conflict: row['state'] == 'conflict',
                               ),
                               child: Text(tr('Discard')),
                             )
@@ -347,7 +357,7 @@ class _WorkspaceScreenState extends ConsumerState<WorkspaceScreen> {
                   if (rows.any((r) => r['state'] == 'conflict'))
                     Text(
                       tr(
-                        'Tap a patient conflict to compare versions. Appointment and clinical conflict recovery still require further implementation; those requests remain retained and blocked.',
+                        'Tap a patient conflict to compare and merge versions. An appointment or clinical conflict can be discarded: its content is kept in recovery history and the saved record is refreshed from the server.',
                       ),
                     ),
                   if (rows.any((r) => r['state'] == 'failed'))

@@ -733,16 +733,28 @@ class ClinicRepository {
           .map((e) => e.data)
           .toList();
 
-  /// Discards a request the server definitively rejected.
+  /// Whether [row] is a queued request the user may discard.
   ///
-  /// Only the `failed` state is eligible: it is reached solely after a
-  /// non-transient server rejection, so the request was never applied. A
-  /// `pending`/`sending` request may already have reached the server and is
-  /// never discarded here. Without this, one rejected request blocks every
-  /// later operation, document upload and shared action indefinitely.
+  /// `failed` is reached solely after a non-transient server rejection, so
+  /// the request was never applied. `conflict` means the server refused the
+  /// request because it holds a newer version, so it was never applied
+  /// either. Patient conflicts have a field-level merge review instead and
+  /// stay out of this path. A `pending`/`sending` request may already have
+  /// reached the server and is never discarded.
+  static bool isDiscardable(Map<String, dynamic> row) =>
+      row['state'] == 'failed' ||
+      (row['state'] == 'conflict' && row['entity_type'] != 'patient');
+
+  /// Discards a request the server definitively refused.
+  ///
+  /// Without this, one refused request blocks every later operation, document
+  /// upload and shared queue action indefinitely - and because critical
+  /// actions require a clean queue, that stalls the clinic on this device.
   ///
   /// The local record still holds the version the server refused, so it is
-  /// restored from the server before the queue resumes.
+  /// restored from the server before the queue resumes. For a conflict the
+  /// discarded local content is kept in recovery history so a clinical draft
+  /// is never silently lost.
   Future<void> discardRejectedOperation(String operationId) async {
     if (_closed || _criticalInProgress || _resolutionInProgress) {
       throw const ClinicFailure(
@@ -753,7 +765,7 @@ class ClinicRepository {
     await _verifySession();
     final rows = await pendingOperations();
     final row = rows.where((r) => r['operation_id'] == operationId).firstOrNull;
-    if (row == null || row['state'] != 'failed') {
+    if (row == null || !isDiscardable(row)) {
       throw const ClinicFailure(
         'review_changed',
         'This request is no longer waiting for review. Refresh synchronization.',
@@ -775,12 +787,36 @@ class ClinicRepository {
         'A newer queued change for this record must be reviewed first.',
       );
     }
-    await db.customStatement(
-      "DELETE FROM outbox WHERE operation_id=? AND state='failed'",
-      [operationId],
-    );
+    await db.transaction(() async {
+      if (row['state'] == 'conflict') await _recordDiscardedConflict(row);
+      await db.customStatement(
+        "DELETE FROM outbox WHERE operation_id=? AND state IN ('failed','conflict')",
+        [operationId],
+      );
+    });
     await _restoreRejectedEntity(type, id);
     _changed();
+  }
+
+  /// Keeps the local content of a discarded appointment or visit conflict in
+  /// the recovery history, next to the server version that superseded it.
+  Future<void> _recordDiscardedConflict(Map<String, dynamic> row) async {
+    final type = row['entity_type'] as String, id = row['entity_id'] as String;
+    await db.customStatement(
+      'INSERT INTO sync_resolutions(id,clinic_id,user_id,entity_id,resolved_at,choice,original_operations,local_value,remote_value,resolved_value,replacement_operation_id) VALUES(?,?,?,?,?,?,?,?,?,?,NULL)',
+      [
+        _uuid.v4(),
+        session.clinicId,
+        session.userId,
+        id,
+        clock().toUtc().toIso8601String(),
+        'discard:$type',
+        jsonEncode([row]),
+        row['payload'] as String,
+        row['remote_value'] as String? ?? '{}',
+        row['remote_value'] as String? ?? '{}',
+      ],
+    );
   }
 
   /// Replaces the locally cached record with the server's copy after a
@@ -1049,7 +1085,9 @@ class ClinicRepository {
   }) async {
     final rows = await db
         .customSelect(
-          'SELECT * FROM sync_resolutions WHERE clinic_id=? AND user_id=? ORDER BY resolved_at DESC,id LIMIT 50 OFFSET ?',
+          // Discarded appointment/visit conflicts share this table under a
+          // 'discard:<type>' choice; they are not patient records.
+          "SELECT * FROM sync_resolutions WHERE clinic_id=? AND user_id=? AND choice IN ('server','merge') ORDER BY resolved_at DESC,id LIMIT 50 OFFSET ?",
           variables: [
             Variable(session.clinicId),
             Variable(session.userId),
@@ -1205,12 +1243,7 @@ class ClinicRepository {
         'Use the appointment status actions.',
       );
     }
-    if (value.durationMinutes < 5 || value.durationMinutes > 240) {
-      throw const ClinicFailure(
-        'validation',
-        'Choose a duration between 5 and 240 minutes.',
-      );
-    }
+    value.validate();
     final next = value.copyWith(version: value.version + 1);
     await db.transaction(() async {
       if (appointmentOverlaps(
